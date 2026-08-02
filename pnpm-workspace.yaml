@@ -1,0 +1,9 @@
+packages:
+  - "apps/web"
+  - "apps/docs"
+  - "packages/sdk-typescript"
+  - "packages/mcp-typescript"
+  - "packages/api-client"
+  - "packages/contracts"
+  - "packages/config"
+  - "packages/ui"

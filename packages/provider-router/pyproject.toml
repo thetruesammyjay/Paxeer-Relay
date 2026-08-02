@@ -1,0 +1,19 @@
+[project]
+name = "paxrelay-router"
+version = "0.1.0"
+description = "PaxRelay provider filtering, scoring and failover engine"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9.0",
+    "paxrelay-domain",
+]
+
+[tool.uv.sources]
+paxrelay-domain = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paxrelay_router"]

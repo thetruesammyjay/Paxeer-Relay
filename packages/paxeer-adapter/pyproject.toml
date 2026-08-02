@@ -1,0 +1,20 @@
+[project]
+name = "paxrelay-paxeer"
+version = "0.1.0"
+description = "PaxRelay adapter layer for Paxeer Network (wallets, LayerX, 402LXP, registry, settlement)"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.9.0",
+    "paxrelay-domain",
+]
+
+[tool.uv.sources]
+paxrelay-domain = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paxrelay_paxeer"]

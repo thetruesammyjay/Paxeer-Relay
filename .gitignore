@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.uv/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Turbo
+.turbo/
+
+# Testing
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+*.lcov
+playwright-report/
+test-results/
+
+# Type checking
+.mypy_cache/
+.pyright/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker volumes (local)
+postgres_data/
+redis_data/
+
+# Generated
+apps/web/.next/
+packages/api-client/src/generated/
+uv.lock.bak
+pnpm-lock.yaml.bak
+
+# Foundry
+packages/contracts/cache/
+packages/contracts/out/
+packages/contracts/broadcast/

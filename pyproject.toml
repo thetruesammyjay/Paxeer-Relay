@@ -1,0 +1,36 @@
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/gateway",
+    "apps/worker",
+    "apps/simulator",
+    "packages/db",
+    "packages/domain",
+    "packages/paxeer-adapter",
+    "packages/policy-engine",
+    "packages/provider-router",
+    "packages/receipts",
+    "packages/mcp-python",
+    "packages/sdk-python",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "S", "ANN"]
+ignore = ["ANN101", "ANN102", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["apps", "packages"]
+addopts = "-v --tb=short"
