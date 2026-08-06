@@ -1,0 +1,36 @@
+---
+title: Quickstart
+description: Make your first paid service call in under 5 minutes
+---
+
+# Quickstart
+
+Create an agent:
+
+```python
+from paxrelay import PaxRelay
+
+relay = PaxRelay(api_key="pk_test_...")
+agent = relay.agents.create(name="My Agent", slug="my-agent")
+```
+
+Attach a policy:
+
+```python
+policy = relay.policies.create(
+    name="Dev Policy",
+    daily_budget={"amount_atomic": 1_000_000, "currency": "USDX"},
+)
+relay.policies.assign(policy.id, agent_id=agent.id)
+```
+
+Call a service:
+
+```python
+result = relay.invoke(
+    agent_id=agent.id,
+    capability="weather.forecast",
+    arguments={"location": "San Francisco"},
+)
+print(result.receipt)
+```

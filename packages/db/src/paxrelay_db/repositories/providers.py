@@ -244,6 +244,40 @@ class SqlAlchemyProviderRepository:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_provider(m) for m in rows]
 
+    async def list(
+        self,
+        organisation_id: UUID,
+        project_id: UUID,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        status: str | None = None,
+        search: str | None = None,
+    ) -> list[Provider]:
+        """Tenant-scoped provider listing with optional status/search filters.
+
+        Unlike :meth:`list_active`, this returns providers of any status unless
+        a ``status`` filter is supplied, so dashboards can surface inactive or
+        suspended providers too.
+        """
+        stmt = select(ProviderModel).where(
+            ProviderModel.organisation_id == sid(organisation_id),
+            ProviderModel.project_id == sid(project_id),
+            ProviderModel.deleted_at.is_(None),
+        )
+        if status is not None:
+            stmt = stmt.where(ProviderModel.status == status)
+        if search is not None:
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                ProviderModel.name.ilike(pattern) | ProviderModel.slug.ilike(pattern)
+            )
+        stmt = (
+            stmt.order_by(ProviderModel.created_at.desc()).limit(limit).offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_provider(m) for m in rows]
+
     async def save(self, provider: Provider) -> Provider:
         m = await self._session.get(ProviderModel, sid(provider.id))
         if m is None:

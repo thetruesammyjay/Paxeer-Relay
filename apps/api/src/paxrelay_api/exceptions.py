@@ -49,17 +49,28 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
+        headers: dict[str, str] | None = None
+        if isinstance(exc, UnauthorizedError):
+            # RFC 7235 §3.1 — a 401 response MUST include WWW-Authenticate.
+            headers = {"WWW-Authenticate": "Bearer"}
         return JSONResponse(
             status_code=exc.http_status,
             content=ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message)).model_dump(),
+            headers=headers,
         )
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        # Only expose field location and message — not input values or internal
+        # Pydantic type names that would help callers probe the schema.
+        safe_details = "; ".join(
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
+            for e in exc.errors()
+        )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=ErrorResponse(
-                error=ErrorBody(code="validation_error", message=str(exc.errors()))
+                error=ErrorBody(code="validation_error", message=safe_details)
             ).model_dump(),
         )
 

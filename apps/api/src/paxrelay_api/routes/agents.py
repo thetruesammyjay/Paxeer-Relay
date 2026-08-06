@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from paxrelay_domain import Agent
 from paxrelay_db.repositories import SqlAlchemyAgentRepository
@@ -52,24 +52,43 @@ async def create_agent(
 
 
 @router.get("", response_model=list[AgentOut])
-async def list_agents(session: SessionDep, tenant: TenantDep) -> list[AgentOut]:
+async def list_agents(
+    session: SessionDep,
+    tenant: TenantDep,
+    status: str | None = Query(None, description="Filter by agent status"),
+    search: str | None = Query(None, description="Case-insensitive match on name or slug"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[AgentOut]:
     repo = SqlAlchemyAgentRepository(session)
-    agents = await repo.list(tenant.organisation_id, tenant.project_id)
+    agents = await repo.list(
+        tenant.organisation_id,
+        tenant.project_id,
+        limit=limit,
+        offset=offset,
+        status=status,
+        search=search,
+    )
     return [_agent_out(a) for a in agents]
 
 
 @router.get("/{agent_id}", response_model=AgentOut)
-async def get_agent(agent_id: UUID, session: SessionDep) -> AgentOut:
+async def get_agent(agent_id: UUID, session: SessionDep, tenant: TenantDep) -> AgentOut:
     repo = SqlAlchemyAgentRepository(session)
     agent = await repo.get(agent_id)
-    if agent is None:
+    # Treat a cross-tenant resource as not-found to avoid information leakage.
+    if agent is None or agent.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Agent {agent_id} not found.")
     return _agent_out(agent)
 
 
 @router.get("/{agent_id}/wallet", response_model=WalletOut)
-async def get_agent_wallet(agent_id: UUID, session: SessionDep) -> WalletOut:
+async def get_agent_wallet(agent_id: UUID, session: SessionDep, tenant: TenantDep) -> WalletOut:
     repo = SqlAlchemyAgentRepository(session)
+    # Verify ownership before reading the wallet.
+    agent = await repo.get(agent_id)
+    if agent is None or agent.organisation_id != tenant.organisation_id:
+        raise NotFoundError(f"Agent {agent_id} not found.")
     wallet = await repo.get_wallet(agent_id)
     if wallet is None:
         raise NotFoundError(f"No wallet found for agent {agent_id}.")

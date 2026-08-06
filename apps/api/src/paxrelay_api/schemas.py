@@ -43,7 +43,10 @@ class ErrorResponse(BaseModel):
 class AgentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
-    wallet_address: str | None = None
+    # EVM checksummed or lowercase 20-byte hex address, or omitted.
+    wallet_address: str | None = Field(
+        default=None, max_length=42, pattern=r"^0x[0-9a-fA-F]{40}$"
+    )
     description: str | None = None
 
 
@@ -76,7 +79,10 @@ class WalletOut(BaseModel):
 class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
-    wallet_address: str | None = None
+    # EVM checksummed or lowercase 20-byte hex address, or omitted.
+    wallet_address: str | None = Field(
+        default=None, max_length=42, pattern=r"^0x[0-9a-fA-F]{40}$"
+    )
     description: str | None = None
     website_url: str | None = None
 
@@ -170,7 +176,13 @@ class PolicyAssignmentOut(BaseModel):
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     key_type: str = Field(default="test", pattern=r"^(test|live)$")
-    scopes: str = ""
+    # Colon-separated capability slugs, e.g. "agents:read:agents:write".
+    # Constrained to prevent arbitrary scope injection before enforcement lands.
+    scopes: str = Field(
+        default="",
+        max_length=512,
+        pattern=r"^([a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)*)?$",
+    )
 
 
 class ApiKeyOut(BaseModel):
@@ -180,3 +192,133 @@ class ApiKeyOut(BaseModel):
     key_type: str
     # The raw key is returned exactly once, at creation time.
     raw_key: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Receipts
+# ---------------------------------------------------------------------------
+
+
+class ReceiptOut(BaseModel):
+    id: UUID
+    tool_call_id: UUID
+    agent_id: UUID
+    provider_id: UUID
+    service_id: UUID
+    service_version: str
+    capability: str
+    request_hash: str
+    response_hash: str
+    payment_amount: int
+    payment_currency: str
+    layerx_transaction: str | None
+    execution_latency_ms: int
+    execution_status: str
+    receipt_hash: str | None
+    signature: str | None
+    signing_key_id: str | None
+    issued_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Transactions
+# ---------------------------------------------------------------------------
+
+
+class TransactionOut(BaseModel):
+    id: UUID
+    agent_id: UUID
+    capability: str
+    request_state: str
+    payment_state: str
+    execution_state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsSpendOut(BaseModel):
+    period: str
+    start_date: datetime
+    end_date: datetime
+    total_amount_atomic: int
+    currency: str
+    decimals: int
+    transaction_count: int
+
+
+class AnalyticsCapabilityOut(BaseModel):
+    capability: str
+    total_amount_atomic: int
+    currency: str
+    decimals: int
+    call_count: int
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+
+class WebhookCreate(BaseModel):
+    url: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
+    event_types: list[str] = Field(min_length=1)
+    secret: str = Field(min_length=16, max_length=128)
+    description: str | None = None
+
+
+class WebhookUpdate(BaseModel):
+    url: str | None = Field(None, min_length=1, max_length=2048, pattern=r"^https?://")
+    event_types: list[str] | None = Field(None, min_length=1)
+    is_active: bool | None = None
+    description: str | None = None
+
+
+class WebhookOut(BaseModel):
+    id: UUID
+    url: str
+    event_types: list[str]
+    is_active: bool
+    description: str | None
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Batch operations
+# ---------------------------------------------------------------------------
+
+
+class BatchAgentCreate(BaseModel):
+    agents: list[AgentCreate] = Field(min_length=1, max_length=100)
+
+
+class BatchAgentResult(BaseModel):
+    success: bool
+    agent: AgentOut | None = None
+    error: str | None = None
+
+
+class BatchAgentResponse(BaseModel):
+    results: list[BatchAgentResult]
+    success_count: int
+    failure_count: int
+
+
+class BatchProviderCreate(BaseModel):
+    providers: list[ProviderCreate] = Field(min_length=1, max_length=100)
+
+
+class BatchProviderResult(BaseModel):
+    success: bool
+    provider: ProviderOut | None = None
+    error: str | None = None
+
+
+class BatchProviderResponse(BaseModel):
+    results: list[BatchProviderResult]
+    success_count: int
+    failure_count: int

@@ -66,17 +66,23 @@ class SqlAlchemyAgentRepository:
         *,
         limit: int = 50,
         offset: int = 0,
+        status: str | None = None,
+        search: str | None = None,
     ) -> list[Agent]:
-        stmt = (
-            select(AgentModel)
-            .where(
-                AgentModel.organisation_id == sid(organisation_id),
-                AgentModel.project_id == sid(project_id),
-                AgentModel.deleted_at.is_(None),
+        stmt = select(AgentModel).where(
+            AgentModel.organisation_id == sid(organisation_id),
+            AgentModel.project_id == sid(project_id),
+            AgentModel.deleted_at.is_(None),
+        )
+        if status is not None:
+            stmt = stmt.where(AgentModel.status == status)
+        if search is not None:
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                AgentModel.name.ilike(pattern) | AgentModel.slug.ilike(pattern)
             )
-            .order_by(AgentModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+        stmt = (
+            stmt.order_by(AgentModel.created_at.desc()).limit(limit).offset(offset)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_agent(m) for m in rows]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from paxrelay_domain import Policy, PolicyAssignment, PolicyMode, PolicyRules
 from paxrelay_db.repositories import SqlAlchemyPolicyRepository
@@ -68,9 +68,25 @@ async def create_policy(
 
 
 @router.get("", response_model=list[PolicyOut])
-async def list_policies(session: SessionDep, tenant: TenantDep) -> list[PolicyOut]:
+async def list_policies(
+    session: SessionDep,
+    tenant: TenantDep,
+    mode: str | None = Query(None, description="Filter by policy mode"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    search: str | None = Query(None, description="Case-insensitive match on name"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[PolicyOut]:
     repo = SqlAlchemyPolicyRepository(session)
-    policies = await repo.list(tenant.organisation_id, tenant.project_id)
+    policies = await repo.list(
+        tenant.organisation_id,
+        tenant.project_id,
+        limit=limit,
+        offset=offset,
+        mode=mode,
+        is_active=is_active,
+        search=search,
+    )
     return [
         PolicyOut(
             id=p.id,
@@ -85,10 +101,11 @@ async def list_policies(session: SessionDep, tenant: TenantDep) -> list[PolicyOu
 
 
 @router.get("/{policy_id}", response_model=PolicyOut)
-async def get_policy(policy_id: UUID, session: SessionDep) -> PolicyOut:
+async def get_policy(policy_id: UUID, session: SessionDep, tenant: TenantDep) -> PolicyOut:
     repo = SqlAlchemyPolicyRepository(session)
     policy = await repo.get(policy_id)
-    if policy is None:
+    # Treat a cross-tenant resource as not-found to avoid information leakage.
+    if policy is None or policy.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Policy {policy_id} not found.")
     return PolicyOut(
         id=policy.id,
@@ -105,10 +122,12 @@ async def assign_policy(
     policy_id: UUID,
     body: PolicyAssignIn,
     session: SessionDep,
+    tenant: TenantDep,
 ) -> PolicyAssignmentOut:
     repo = SqlAlchemyPolicyRepository(session)
     policy = await repo.get(policy_id)
-    if policy is None:
+    # Verify ownership so callers cannot assign policies from other tenants.
+    if policy is None or policy.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Policy {policy_id} not found.")
     assignment = await repo.assign(PolicyAssignment(agent_id=body.agent_id, policy_id=policy_id))
     return PolicyAssignmentOut(

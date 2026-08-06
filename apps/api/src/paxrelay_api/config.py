@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,18 +27,25 @@ class ApiSettings(BaseSettings):
     database_pool_size: int = 10
     database_max_overflow: int = 20
 
-    # Authentication (reserved for JWT-backed dashboard sessions)
-    auth_secret: str = "replace-me-with-a-secure-random-string"
+    # Authentication (reserved for JWT-backed dashboard sessions).
+    # No default — the process must supply these via environment or .env;
+    # a missing value raises a startup error rather than shipping insecure defaults.
+    auth_secret: str
     jwt_issuer: str = "paxrelay"
     jwt_audience: str = "paxrelay-api"
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 2_592_000
 
-    # Webhooks
-    webhook_signing_secret: str = "replace-me-with-a-secure-random-string"
+    # Webhooks — no default, same reasoning as auth_secret.
+    webhook_signing_secret: str
 
 
-@lru_cache
 def get_settings() -> ApiSettings:
-    """Return the process-wide cached API settings."""
+    """Return a fresh :class:`ApiSettings` instance from the environment.
+
+    Caching is intentionally omitted: pydantic-settings re-reads the
+    environment (and .env file) on each call, which keeps tests and
+    hot-reload predictable.  If startup performance becomes a concern,
+    cache at the caller's discretion rather than here.
+    """
     return ApiSettings()

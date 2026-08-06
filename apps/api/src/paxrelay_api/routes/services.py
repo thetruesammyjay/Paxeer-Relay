@@ -62,7 +62,9 @@ async def publish_service(
 ) -> ServiceOut:
     repo = SqlAlchemyProviderRepository(session)
     provider = await repo.get(provider_id)
-    if provider is None:
+    # Reject cross-tenant provider references — treat as not-found to avoid
+    # leaking the existence of providers owned by other organisations.
+    if provider is None or provider.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Provider {provider_id} not found.")
 
     service = Service(
@@ -125,9 +127,10 @@ async def list_services(session: SessionDep, tenant: TenantDep) -> list[ServiceO
 
 
 @router.get("/{service_id}", response_model=ServiceOut)
-async def get_service(service_id: UUID, session: SessionDep) -> ServiceOut:
+async def get_service(service_id: UUID, session: SessionDep, tenant: TenantDep) -> ServiceOut:
     repo = SqlAlchemyProviderRepository(session)
     service = await repo.get_service(service_id)
-    if service is None:
+    # Treat a cross-tenant resource as not-found to avoid information leakage.
+    if service is None or service.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Service {service_id} not found.")
     return _service_out(service)

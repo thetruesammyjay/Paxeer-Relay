@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from paxrelay_domain import Provider
 from paxrelay_db.repositories import SqlAlchemyProviderRepository
@@ -53,16 +53,31 @@ async def create_provider(
 
 
 @router.get("", response_model=list[ProviderOut])
-async def list_providers(session: SessionDep, tenant: TenantDep) -> list[ProviderOut]:
+async def list_providers(
+    session: SessionDep,
+    tenant: TenantDep,
+    status: str | None = Query(None, description="Filter by provider status"),
+    search: str | None = Query(None, description="Case-insensitive match on name or slug"),
+    limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[ProviderOut]:
     repo = SqlAlchemyProviderRepository(session)
-    providers = await repo.list_active(tenant.organisation_id, tenant.project_id)
+    providers = await repo.list(
+        tenant.organisation_id,
+        tenant.project_id,
+        limit=limit,
+        offset=offset,
+        status=status,
+        search=search,
+    )
     return [_provider_out(p) for p in providers]
 
 
 @router.get("/{provider_id}", response_model=ProviderOut)
-async def get_provider(provider_id: UUID, session: SessionDep) -> ProviderOut:
+async def get_provider(provider_id: UUID, session: SessionDep, tenant: TenantDep) -> ProviderOut:
     repo = SqlAlchemyProviderRepository(session)
     provider = await repo.get(provider_id)
-    if provider is None:
+    # Treat a cross-tenant resource as not-found to avoid information leakage.
+    if provider is None or provider.organisation_id != tenant.organisation_id:
         raise NotFoundError(f"Provider {provider_id} not found.")
     return _provider_out(provider)

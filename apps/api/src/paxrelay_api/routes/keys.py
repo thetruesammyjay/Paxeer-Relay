@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, status
 
@@ -46,7 +46,7 @@ async def create_api_key(
         organisation_id=sid(tenant.organisation_id),
         project_id=sid(tenant.project_id),
         environment=tenant.environment,
-        expires_at=datetime.utcnow() + timedelta(days=365),
+        expires_at=datetime.now(UTC) + timedelta(days=365),
     )
     session.add(key)
     await session.flush()

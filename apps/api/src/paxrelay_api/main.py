@@ -17,10 +17,15 @@ from paxrelay_db import close_database, configure_database
 from paxrelay_api.config import get_settings
 from paxrelay_api.exceptions import register_error_handlers
 from paxrelay_api.routes.agents import router as agents_router
+from paxrelay_api.routes.analytics import router as analytics_router
+from paxrelay_api.routes.batch import router as batch_router
 from paxrelay_api.routes.keys import router as keys_router
 from paxrelay_api.routes.policies import router as policies_router
 from paxrelay_api.routes.providers import router as providers_router
+from paxrelay_api.routes.receipts import router as receipts_router
 from paxrelay_api.routes.services import router as services_router
+from paxrelay_api.routes.transactions import router as transactions_router
+from paxrelay_api.routes.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -53,6 +58,11 @@ def create_app() -> FastAPI:
     app.include_router(services_router, prefix="/v1")
     app.include_router(policies_router, prefix="/v1")
     app.include_router(keys_router, prefix="/v1")
+    app.include_router(receipts_router, prefix="/v1")
+    app.include_router(transactions_router, prefix="/v1")
+    app.include_router(analytics_router, prefix="/v1")
+    app.include_router(webhooks_router, prefix="/v1")
+    app.include_router(batch_router, prefix="/v1")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

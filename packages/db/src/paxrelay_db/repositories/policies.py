@@ -78,14 +78,29 @@ class SqlAlchemyPolicyRepository:
         m = (await self._session.execute(stmt)).scalars().first()
         return _to_policy(m) if m is not None else None
 
-    async def list(self, organisation_id: UUID, project_id: UUID) -> list[Policy]:
+    async def list(
+        self,
+        organisation_id: UUID,
+        project_id: UUID,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        mode: str | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+    ) -> list[Policy]:
+        stmt = select(PolicyModel).where(
+            PolicyModel.organisation_id == sid(organisation_id),
+            PolicyModel.project_id == sid(project_id),
+        )
+        if mode is not None:
+            stmt = stmt.where(PolicyModel.mode == mode)
+        if is_active is not None:
+            stmt = stmt.where(PolicyModel.is_active.is_(is_active))
+        if search is not None:
+            stmt = stmt.where(PolicyModel.name.ilike(f"%{search}%"))
         stmt = (
-            select(PolicyModel)
-            .where(
-                PolicyModel.organisation_id == sid(organisation_id),
-                PolicyModel.project_id == sid(project_id),
-            )
-            .order_by(PolicyModel.created_at.desc())
+            stmt.order_by(PolicyModel.created_at.desc()).limit(limit).offset(offset)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_policy(m) for m in rows]
