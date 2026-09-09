@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
-
+import { ResourcePage } from "@/components/resource-page";
 export const metadata: Metadata = { title: "Policies" };
-
-export default function PoliciesPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">Policies</h1>
-      {/* Policy list + policy builder — implemented in a later step */}
-    </div>
-  );
+export default function Page() {
+  return <ResourcePage kind="policies" />;
 }

@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
-
+import { ResourcePage } from "@/components/resource-page";
 export const metadata: Metadata = { title: "Services" };
-
-export default function ServicesPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">Services</h1>
-      {/* Service listing + publish button — implemented in a later step */}
-    </div>
-  );
+export default function Page() {
+  return <ResourcePage kind="services" />;
 }

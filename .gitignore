@@ -67,3 +67,6 @@ pnpm-lock.yaml.bak
 packages/contracts/cache/
 packages/contracts/out/
 packages/contracts/broadcast/
+
+# Local design references
+/AiKi/
