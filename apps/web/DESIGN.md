@@ -1,107 +1,111 @@
-# Paxeer Relay — Design Direction
+# PaxRelay Visual Direction
 
-> A calm operations desk for software that spends money.
+> Forge fire on warm limestone.
 
-Paxeer Relay is a payment gateway, service router, and AgentOps control plane for teams running autonomous agents on Paxeer Network. Its primary audience is the operator accountable for cost, permissions, and reliability. Every screen has one job: make it obvious what an agent is doing, what it may do, what needs a person, and what can be proven afterward.
+PaxRelay is an operations desk for teams that let software spend money. The interface should feel like a clear instrument: bold enough to be memorable, calm enough to support careful decisions, and direct about what an agent is allowed to do.
 
-## Design thesis
+This direction uses the Caldera reference's warm paper surfaces, industrial display type, flat construction, ember actions, and halftone artwork. The dashboard keeps its operational hierarchy and readable data density.
 
-The interface should feel like an instrument, not a casino, wallet, or generic admin template. It borrows AiKi’s task-first information hierarchy, compact shell, plain-language state labels, and restrained warm accent. It borrows Refero’s strongest SaaS lessons: hairlines instead of ornamental shadows, precise density, few radii, one committed action color, and product evidence as the visual texture.
+## Design principles
 
-The signature gesture is the **relay trace**: request → policy → settlement → receipt. It is the product’s real value chain and should appear anywhere the lifecycle matters. Amber-orange is the moving signal in that trace and the color of authority requiring attention.
-
-## Principles
-
-1. **Lead with current state.** Put live work, blocked work, and decisions above retrospective charts.
-2. **Authority is explicit.** Approval copy names the agent, provider, amount, rule, and expiry. Never make approval a vague confirmation.
-3. **Evidence stays attached.** A payment, provider response, policy decision, and receipt are parts of one trace.
-4. **Color has a job.** Orange is action and human attention. Green is verified or safely complete. Blue is routing or informational. Red is denied or failed. Neutrals do everything else.
-5. **Numbers need context.** Pair every metric with a period, denominator, delta, or operational meaning.
-6. **Compact, never cramped.** Dense tables use 53px rows, clear grouping, and generous page gutters. Reading copy remains at a comfortable line height.
-7. **Fail closed in the interface.** Uncertain payment, policy, or signature states must not look successful.
+1. **Let type carry the character.** Use condensed, heavy display headings. Keep supporting copy plain and medium weight.
+2. **Use orange with purpose.** Ember marks the main action, an active step, or a decision that needs attention.
+3. **Build depth with paper and color.** Separate the pumice canvas, limestone surfaces, and rare feature panels. Do not use shadows.
+4. **Keep decisions legible.** Name the agent, service, price, policy, and result in plain language. State labels and icons must work without color.
+5. **Use one signature image.** The orange halftone over violet is for a hero or lifecycle illustration. Keep the rest of the interface quiet.
+6. **Preserve evidence.** Keep the payment, provider response, policy result, and receipt close together in the request story.
 
 ## Color tokens
 
-| Token         |     Value | Role                                                           |
-| ------------- | --------: | -------------------------------------------------------------- |
-| Canvas        | `#F3F4F1` | App background; cool enough to avoid a generic cream aesthetic |
-| Paper         | `#FFFFFF` | Tables, cards, controls                                        |
-| Soft paper    | `#F8F9F6` | Sidebar, table heads, nested states                            |
-| Ink           | `#171917` | Primary text and committed neutral actions                     |
-| Secondary ink | `#454944` | Body and inactive navigation                                   |
-| Muted         | `#737972` | Labels, metadata, helper copy                                  |
-| Hairline      | `#DDE0DA` | Primary structural border                                      |
-| Relay orange  | `#F36B21` | Authority, live relay position, focused action                 |
-| Relay soft    | `#FFF0E6` | Orange avatar and attention wash                               |
-| Verified      | `#147A58` | Healthy, settled, verified                                     |
-| Pending       | `#9A6700` | Waiting for a person or external state                         |
-| Denied        | `#B33434` | Failure, refusal, suspended authority                          |
-| Routing       | `#23658C` | In-flight routing and informational state                      |
+| Name | Value | Use |
+| --- | --- | --- |
+| Pumice | #e2e2df | Main page canvas |
+| Limestone | #f7f6f2 | Cards, content panels, and quiet controls |
+| Obsidian | #070607 | Main text, headings, borders, and dark panels |
+| Chalk | #ffffff | Text on dark surfaces |
+| Ember | #fc5000 | Primary action, active relay step, and key emphasis |
+| Plasma violet | #524ae9 | Hero halftone and one featured visual surface only |
+| Sulfur | #f5f28e | Category tags and small explanatory badges |
 
-Do not use decorative gradients, multicolor glows, or purple UI chrome. A dark surface is reserved for the live relay trace and sign-in narrative, where it creates focus rather than acting as a theme toggle.
+Keep the palette constrained. Do not use violet for buttons or routine status. Do not add color for decoration. Use words and simple icons first for states such as settled, pending, denied, and routing. Any state color must communicate a real outcome and pass contrast checks.
 
 ## Typography
 
-- **Display:** Trebuchet MS, falling back to Segoe UI. Use only for the brand, page titles, live narrative, and large metrics. Its humanist shapes keep the product from feeling like a generic developer dashboard.
-- **Interface:** Segoe UI, falling back to Helvetica Neue and Arial. Use 10–14px in the application, with 550–700 weights for controls and labels.
-- **Evidence:** Cascadia Code, falling back to Consolas and monospace. Use for transaction IDs, hashes, network labels, time, policy versions, and compact metadata only.
+- **Display:** PP Neue Corp Compact when a licensed font file is available. Use Bebas Neue, Anton, or Impact as a substitute. Apply it to page titles, hero statements, and large metrics.
+- **Interface:** DM Sans Medium (500). Use Inter Medium or a system sans-serif fallback if DM Sans is unavailable. Use it for body copy, navigation, controls, tables, and supporting headings.
+- **Captions:** System sans-serif at 12px for dates and secondary metadata only.
 
-Page titles use tight tracking around `-0.045em`; numeric metrics use `-0.04em`. Body copy never adopts display tracking.
+Use positive tracking around 0.02em for the condensed display face. Do not squeeze its letters together. Use 26px and above for structural headings. Keep ordinary page titles around 48-64px, supporting headings around 26-32px, and body copy at 14-18px with comfortable line height. Reserve 80-189px type for entry pages and poster-like feature moments, not routine data screens.
 
-## Layout and rhythm
+## Layout and shape
 
-- Desktop shell: 232px fixed sidebar, 58px sticky context bar, fluid content up to 1480px.
-- Page gutter: 32px desktop, 15px mobile.
-- Base spacing: 4px. Common gaps: 8, 12, 14, 18, 24, 32px.
-- Card radius: 11px. Control radius: 8px. Status pills are fully rounded.
-- Default separation: 1px hairline. Shadows are reserved for floating mobile navigation and true overlays.
-- Mobile: navigation becomes a four-action floating dock. Tables scroll horizontally. Approval actions and page actions remain thumb-sized.
+- Maximum content width: 1280px.
+- Give marketing and entry pages generous section gaps, around 80px.
+- Use a 4px spacing base, with 16px for common control gaps and 40px for card padding.
+- Cards and major content panels use a 40px radius.
+- Buttons, tags, navigation containers, and compact controls use a full pill shape.
+- Inputs use a full pill shape. On dark panels, use a 1.5px Chalk outline and Chalk text.
+- Keep surfaces flat. Use no drop shadows. Use solid, dotted, or color boundaries only when they explain grouping or sequence.
 
-## Core components
+## Components
 
-### Relay trace
+### Navigation
 
-A dark operational panel with a faint engineering grid. Four connected nodes describe the actual lifecycle. Complete nodes use quiet green; the single active node uses relay orange; future nodes remain neutral. Motion is limited to the live health pulse and is disabled for reduced-motion users.
+Use a Limestone pill container for top-level navigation on entry and marketing pages. Keep links in Obsidian, with a small Ember marker for the active destination. In the operator console, a persistent navigation rail may remain for fast access; make it a quiet Limestone surface with the same pill-shaped links.
 
-### Page header
+### Page headings
 
-An evidence-oriented eyebrow, direct title, one-sentence purpose, one secondary action, and one primary action. Avoid more than two actions at this level.
+Use one clear title, a short explanation, and no more than two actions. The main action is an Ember pill with Obsidian text. Secondary actions are outlined or quiet pill links.
+
+### Relay flow
+
+Show the request as a sequence: agent request, policy and price check, payment, provider response, receipt. Use connected steps only when the order matters. The current step may use Ember. Use the violet halftone treatment once as a visual anchor; keep labels outside dense dot fields.
+
+### Data surfaces
+
+Use Limestone panels with 40px corners and no shadows. Keep tables calm and readable, with strong first-column text, clear row separators, and enough spacing for quick scanning. Keep transaction IDs, hashes, and network details in small evidence text rather than headlines.
 
 ### Metrics
 
-Flat cards with a short colored edge at the top-right. Never use oversized icon tiles. Every metric includes comparison or scope beneath the value.
+Use flat, clear numbers with a time period or comparison. Ember can fill one featured metric panel. Keep the remaining metrics on Limestone; do not turn every card into a colored tile.
 
-### Data tables
+### Approval requests
 
-The dominant resource view. Use uppercase monospace headers, quiet row separators, a strong first column, compact identity avatars, and plain-language status pills. IDs are shortened visually but remain recognizable by prefix.
+Show the agent, requested service, amount, rule, current limit, and expiry before the decision. Use Sulfur for a review tag. Name both actions clearly. A user should understand what approval changes before acting.
 
-### Approval request
+### Inputs
 
-Warm, contained, and specific. It shows current limit, requested amount, and expiry before presenting the decision. Orange means review; denial remains a quiet secondary action unless the request is actively dangerous.
+Keep search and form fields as wide pills with clear labels. Use the Chalk outline treatment on Obsidian surfaces. On light pages, use Limestone fills and a 1.5px Obsidian outline.
 
-### Status language
+## Graphics and imagery
 
-Prefer outcomes people understand: `Settled`, `Verified`, `Routing`, `Review`, `Denied`, `Paused`. Avoid protocol-state names when a plain-language label exists. A dot always accompanies color so state does not depend on color alone.
+Use graphic artwork rather than stock photography, 3D renders, or crypto decoration. The signature treatment is a high-density halftone that moves from Plasma violet toward Ember. Use it in a large, rounded hero or in the request-flow image. Keep icons small, monochrome, and simple.
+
+## Accessibility and responsive behavior
+
+- Keep text and controls high contrast. Ember actions use Obsidian text.
+- Pair every status color with a written label and a distinct icon or shape.
+- Keep keyboard focus visible with a 2px Ember outline and offset.
+- Respect reduced-motion preferences. Motion must never carry essential status information.
+- Let tables scroll inside their own surface on small screens; do not create page-wide horizontal overflow.
+- Keep primary controls at least 44px high on touch screens.
 
 ## Voice
 
-Write from the operator’s side of the screen. Use active, precise verbs: `Add agent`, `Create policy`, `Review request`, `Verify receipt`, `Save changes`. Describe what did or did not happen. Never say only that something went wrong.
+Write from the operator's point of view. Use short, active labels such as Add agent, Review request, Verify receipt, and Save changes. Say what happened and what the person can do next. Explain a technical term when it first appears.
 
-Good: “Research Runner needs a one-time exception above its per-call limit.”
+## Do
 
-Avoid: “Approval required for transaction.”
+- Use warm neutral surfaces and Obsidian text.
+- Use Ember for the main action and active relay position.
+- Keep the violet halftone rare and recognizable.
+- Use 40px surfaces and pill-shaped controls consistently.
+- Keep evidence near the decision it supports.
 
-## Accessibility and motion
+## Do not
 
-- Minimum 2px orange keyboard focus ring with offset.
-- Status is communicated by label and dot as well as color.
-- Respect `prefers-reduced-motion`; no essential information depends on animation.
-- Maintain at least 4.5:1 text contrast for body copy.
-- Mobile controls remain at least 36px high, with primary navigation at 52px.
-- Horizontal table overflow must not create page-level overflow.
-
-## Do / do not
-
-**Do:** show live work before analytics; keep receipt and policy context close to a transaction; use one strong action per surface; use product data as the visual interest; let whitespace separate jobs.
-
-**Do not:** decorate with crypto motifs; use green as a generic action color; turn every state into a card; rely on large shadows; put more than one orange filled action in a local decision area; imply that connecting a wallet grants authority.
+- Add shadows, gradients outside the signature artwork, or extra accent colors.
+- Use violet for buttons, routine navigation states, or status decoration.
+- Use large type in dense tables or small display headings below 26px.
+- Make success depend on color alone.
+- Imply that connecting a wallet gives PaxRelay custody or spending authority.
