@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from sqlalchemy import select
 
 from paxrelay_domain import EventType
@@ -137,11 +137,17 @@ async def update_webhook(
     return _webhook_out(m)
 
 
-@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{webhook_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    response_model=None,
+)
 async def delete_webhook(
     webhook_id: UUID, session: SessionDep, tenant: TenantDep
-) -> None:
+) -> Response:
     """Delete a webhook endpoint."""
     m = await _get_owned(session, tenant, webhook_id)
     await session.delete(m)
     await session.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,11 +1,15 @@
 /**
  * Typed fetch wrapper around the PaxRelay control-plane API.
  *
- * The base URL comes from NEXT_PUBLIC_API_URL; the bearer token is injected
- * per-request by the caller (server components read it from the session).
+ * The base URL comes from NEXT_PUBLIC_API_BASE_URL (with NEXT_PUBLIC_API_URL
+ * retained as a compatibility fallback); the bearer token is injected by the
+ * caller.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(

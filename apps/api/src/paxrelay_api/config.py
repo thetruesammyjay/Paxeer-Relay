@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+_API_DIRECTORY = _REPOSITORY_ROOT / "apps" / "api"
 
 
 class ApiSettings(BaseSettings):
     """Environment-driven settings for the control-plane API."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Support both the repository's shared .env and a service-local file
+        # when uvicorn is started from apps/api. Environment variables still
+        # take precedence over values loaded from either file.
+        env_file=(_REPOSITORY_ROOT / ".env", _API_DIRECTORY / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

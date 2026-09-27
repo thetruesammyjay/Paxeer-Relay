@@ -52,7 +52,7 @@ A successful payment does not guarantee that a service delivered a successful re
 
 PaxRelay is pre-alpha. The repository contains early code for coordinating requests and payments, a dashboard preview, and a local practice simulator. The dashboard shows sample information, the simulator invents payment results, and background operations are unfinished.
 
-Parts of the project are being reorganized. This checkout is not yet ready to run as one complete product. The technical reference explains what is present and what still needs to be connected.
+Parts of the project are being reorganized. This checkout is not yet ready to run as one complete product. Developers can find local setup and detailed implementation notes in the [technical documentation](docs/TECHNICAL.md).
 
 ## Author
 

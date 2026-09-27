@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
 export type ResourceKind =
@@ -349,6 +352,15 @@ const statusTone = (value: string) => {
 export function ResourcePage({ kind }: { kind: ResourceKind }) {
   const config = CONFIG[kind];
   const isAnalytics = kind === "analytics";
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const rows = useMemo(
+    () =>
+      config.rows.filter((row) =>
+        row.some((cell) => cell.toLowerCase().includes(normalizedQuery)),
+      ),
+    [config.rows, normalizedQuery],
+  );
   return (
     <div className="page">
       <header className="page-head">
@@ -358,13 +370,24 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
           <p className="page-subtitle">{config.description}</p>
         </div>
         <div className="page-actions">
-          <button className="button">Documentation</button>
-          <button className="button primary">
+          <button className="button" type="button" disabled>
+            Documentation
+          </button>
+          <button className="button primary" type="button" disabled>
             <Icon name={kind === "settings" ? "check" : "plus"} width={14} />
             {config.action}
           </button>
         </div>
       </header>
+      <div className="preview-note" role="note">
+        <span className="preview-note-mark" aria-hidden="true">
+          i
+        </span>
+        <p>
+          <strong>Sample data.</strong> These records are examples. Actions on
+          this page are not connected to the API.
+        </p>
+      </div>
       {isAnalytics ? (
         <div className="grid metrics" style={{ marginBottom: 14 }}>
           {[
@@ -398,16 +421,15 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
       <div className="toolbar">
         <input
           className="search"
+          type="search"
           aria-label={`Search ${config.title}`}
           placeholder={`Search ${config.title.toLowerCase()}…`}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
         />
-        <button className="button">
-          <Icon name="filter" width={13} />
-          Filter
-        </button>
         <div className="toolbar-spacer" />
-        <span className="card-meta">
-          {config.rows.length} RESULTS · UPDATED NOW
+        <span className="card-meta" aria-live="polite">
+          {rows.length} sample {rows.length === 1 ? "row" : "rows"}
         </span>
       </div>
       <section className="card">
@@ -417,7 +439,7 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
               ? "Requests requiring a decision"
               : `All ${config.title.toLowerCase()}`}
           </h2>
-          <span className="status safe">Live data</span>
+          <span className="status neutral">Sample data</span>
         </div>
         <div className="table-wrap">
           <table className="data-table">
@@ -429,46 +451,55 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
               </tr>
             </thead>
             <tbody>
-              {config.rows.map((row, index) => (
-                <tr key={row[0]}>
-                  {row.map((cell, cellIndex) => (
-                    <td
-                      key={cellIndex}
-                      className={
-                        cellIndex === 0
-                          ? "primary-cell mono"
-                          : cell.includes("USDX") || cell.startsWith("$")
-                            ? "amount"
-                            : ""
-                      }
-                    >
-                      {cellIndex === row.length - 1 ? (
-                        <span className={`status ${statusTone(cell)}`}>
-                          {cell}
-                        </span>
-                      ) : cellIndex === 1 &&
-                        ["agents", "transactions", "approvals"].includes(
-                          kind,
-                        ) ? (
-                        <div className="agent-cell">
-                          <span
-                            className={`agent-avatar ${index % 3 === 0 ? "orange" : index % 3 === 1 ? "green" : "blue"}`}
-                          >
-                            {cell
-                              .split(" ")
-                              .map((part) => part[0])
-                              .join("")
-                              .slice(0, 2)}
-                          </span>
-                          <span className="primary-cell">{cell}</span>
-                        </div>
-                      ) : (
-                        cell
-                      )}
-                    </td>
-                  ))}
+              {rows.length === 0 ? (
+                <tr>
+                  <td className="empty-row" colSpan={config.columns.length}>
+                    No sample records match this search. Clear the search to
+                    see every row.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                rows.map((row, index) => (
+                  <tr key={row[0]}>
+                    {row.map((cell, cellIndex) => (
+                      <td
+                        key={cellIndex}
+                        className={
+                          cellIndex === 0
+                            ? "primary-cell mono"
+                            : cell.includes("USDX") || cell.startsWith("$")
+                              ? "amount"
+                              : ""
+                        }
+                      >
+                        {cellIndex === row.length - 1 ? (
+                          <span className={`status ${statusTone(cell)}`}>
+                            {cell}
+                          </span>
+                        ) : cellIndex === 1 &&
+                          ["agents", "transactions", "approvals"].includes(
+                            kind,
+                          ) ? (
+                          <div className="agent-cell">
+                            <span
+                              className={`agent-avatar ${index % 3 === 0 ? "orange" : index % 3 === 1 ? "green" : "blue"}`}
+                            >
+                              {cell
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)}
+                            </span>
+                            <span className="primary-cell">{cell}</span>
+                          </div>
+                        ) : (
+                          cell
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

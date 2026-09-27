@@ -1,0 +1,7 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'>
+  <style>.gate{fill:#171917}@media(prefers-color-scheme:dark){.gate{fill:#fff}}</style>
+  <path fill='#F36B21' d='M4 19h49l8 6-8 6H4z'/>
+  <path fill='#F36B21' d='M4 34h49l8 6-8 6H4z'/>
+  <path class='gate' d='M17 6h18c13.3 0 24 10.7 24 24v27H46V30c0-6.1-4.9-11-11-11h-5v39H17z'/>
+  <path class='gate' d='m31 36 13-1 16 23H44L31 47z'/>
+</svg>

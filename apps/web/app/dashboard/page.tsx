@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Icon } from "@/components/icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Activity01Icon,
+  Add01Icon,
+  CheckmarkCircle01Icon,
+  ShieldCheckIcon,
+} from "@hugeicons/core-free-icons";
 export const metadata: Metadata = { title: "Overview" };
 
 const transactions = [
@@ -46,6 +52,27 @@ const transactions = [
   },
 ];
 
+const platformEvents = [
+  {
+    icon: CheckmarkCircle01Icon,
+    title: "Receipt verified",
+    body: "Atlas Search · txn_8V4…K2",
+    time: "18s",
+  },
+  {
+    icon: ShieldCheckIcon,
+    title: "Policy blocked overspend",
+    body: "Research Runner · rule_04",
+    time: "2m",
+  },
+  {
+    icon: Activity01Icon,
+    title: "Provider route recovered",
+    body: "Vector Cloud · fallback B",
+    time: "7m",
+  },
+];
+
 export default function DashboardPage() {
   return (
     <div className="page">
@@ -63,19 +90,28 @@ export default function DashboardPage() {
             View activity
           </Link>
           <Link className="button primary" href="/agents">
-            <Icon name="plus" width={14} />
+            <HugeiconsIcon icon={Add01Icon} size={15} color="currentColor" strokeWidth={1.7} aria-hidden="true" />
             Add agent
           </Link>
         </div>
       </header>
+      <div className="preview-note" role="note">
+        <span className="preview-note-mark" aria-hidden="true">
+          i
+        </span>
+        <p>
+          <strong>Sample workspace.</strong> Metrics and activity below are
+          examples. Approval actions are not saved or sent to the API.
+        </p>
+      </div>
       <section className="grid metrics" aria-label="Workspace metrics">
         <div
           className="card metric"
           style={{ "--metric-color": "var(--safe)" } as React.CSSProperties}
         >
           <div className="metric-label">
-            <span>Relay volume</span>
-            <Icon name="activity" width={14} />
+            <span>Relay volume · 7D</span>
+            <HugeiconsIcon icon={Activity01Icon} size={15} color="currentColor" strokeWidth={1.7} aria-hidden="true" />
           </div>
           <div className="metric-value">18,429</div>
           <div className="metric-foot">
@@ -123,13 +159,13 @@ export default function DashboardPage() {
           <div className="card relay-panel">
             <div className="relay-top">
               <div>
-                <div className="relay-kicker">Live relay · req_91B7F2</div>
+                <div className="relay-kicker">Sample request · req_91B7F2</div>
                 <h2 className="relay-title">
                   Research Runner is buying a verified market snapshot.
                 </h2>
               </div>
               <div className="relay-live">
-                <i className="pulse" /> 247 ms elapsed
+                <i className="pulse" /> Sample timing · 247 ms
               </div>
             </div>
             <div className="relay-trace">
@@ -276,32 +312,18 @@ export default function DashboardPage() {
           <div className="card">
             <div className="card-head">
               <h2 className="card-title">What just happened</h2>
-              <span className="card-meta">LIVE</span>
+              <span className="card-meta">Sample activity</span>
             </div>
-            {[
-              ["check", "Receipt verified", "Atlas Search · txn_8V4…K2", "18s"],
-              [
-                "policies",
-                "Policy blocked overspend",
-                "Research Runner · rule_04",
-                "2m",
-              ],
-              [
-                "activity",
-                "Provider route recovered",
-                "Vector Cloud · fallback B",
-                "7m",
-              ],
-            ].map(([icon, title, body, time]) => (
-              <div className="activity-row" key={title}>
+            {platformEvents.map((event) => (
+              <div className="activity-row" key={event.title}>
                 <span className="activity-icon">
-                  <Icon name={icon as "check"} width={14} />
+                  <HugeiconsIcon icon={event.icon} size={15} color="currentColor" strokeWidth={1.7} aria-hidden="true" />
                 </span>
                 <span className="activity-copy">
-                  <strong>{title}</strong>
-                  <span>{body}</span>
+                  <strong>{event.title}</strong>
+                  <span>{event.body}</span>
                 </span>
-                <span className="activity-time">{time}</span>
+                <span className="activity-time">{event.time}</span>
               </div>
             ))}
           </div>
