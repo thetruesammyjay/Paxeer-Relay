@@ -63,5 +63,8 @@ pnpm dev
 ```
 
 The web console is still a prototype and most views use sample data. The
-simulator returns fabricated network results and worker jobs are placeholders.
+simulator returns fabricated network results. The worker expires overdue policy
+approvals, fans supported outbox events into durable delivery rows, and sends
+HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation,
+provider health, analytics, and indexing remain placeholders.
 Do not use mock output as evidence of a real payment or settlement.

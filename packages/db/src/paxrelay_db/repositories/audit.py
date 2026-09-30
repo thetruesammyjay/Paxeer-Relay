@@ -26,16 +26,20 @@ class SqlAlchemyAuditRepository:
         organisation_id: UUID,
         project_id: UUID,
         details: dict | None = None,
+        environment: str = "development",
+        ip_address: str | None = None,
     ) -> None:
         m = AuditLogModel(
             id=str(uuid.uuid4()),
             organisation_id=sid(organisation_id),
             project_id=sid(project_id),
+            environment=environment,
             event_type=event_type,
             actor_id=actor_id,
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
+            ip_address=ip_address,
         )
         self._session.add(m)
         await self._session.flush()

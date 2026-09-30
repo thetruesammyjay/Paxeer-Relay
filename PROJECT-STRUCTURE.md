@@ -8,11 +8,11 @@ This document contains the detailed product specification, system design, and de
 
 The repository is in pre-alpha and in an active refactor.
 
-- The control-plane API has early routes for agents, providers, services, policies, API keys, receipts, transactions, analytics, and webhooks.
+- The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, and PostgreSQL readiness reporting. The gateway and dashboard still have production security gaps.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
 - The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
-- The worker starts background loops, but the reconciliation, provider health, analytics, indexing, and outbox jobs are placeholders.
+- The worker expires overdue policy approvals, fans supported events into the durable webhook queue, and sends signed webhooks with DNS pinning and bounded retries. Its reconciliation, provider health, analytics, and indexing jobs are placeholders.
 - Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK and MCP module files are placeholders, and the TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
@@ -1024,7 +1024,13 @@ Responsibilities:
 * Generate receipts.
 * Return results to agents.
 
-The gateway must remain stateless where possible. Durable state should be stored in PostgreSQL, while short-lived locks and caches should use Redis.
+The gateway must remain stateless where possible. Durable state should be stored in PostgreSQL, while short-lived coordination and rate-limit counters use Redis.
+
+Current gateway requests use tenant-scoped API keys. In staging and production,
+Redis enforces a shared fixed-window limit of 120 requests per key per minute
+by default; startup and `/ready` check Redis when this limit is enabled. The
+gateway rejects oversized request bodies and provider responses and bounds
+provider connection and total request timeouts.
 
 ### `apps/worker`
 
@@ -2172,7 +2178,8 @@ settlement.mismatch
 
 ```text
 X-PaxRelay-Event
-X-PaxRelay-Delivery
+X-PaxRelay-Event-Id
+X-PaxRelay-Delivery-Id
 X-PaxRelay-Timestamp
 X-PaxRelay-Signature
 ```
@@ -2180,8 +2187,15 @@ X-PaxRelay-Signature
 Signature input:
 
 ```text
-timestamp + "." + raw_request_body
+timestamp + "." + delivery_id + "." + event_type + "." + raw_request_body
 ```
+
+The timestamp, event type, event ID, and delivery ID identify the signed
+request. Delivery is at least once; consumers should use constant-time HMAC
+comparison and deduplicate delivery IDs. The worker currently emits
+`agent.created`, `provider.created`, `policy.created`, `service.published`, and
+approval decision/expiration events. Other event types in the enum are
+available for subscriptions but are not yet wired to producers.
 
 Webhook consumers must reject:
 
@@ -2216,6 +2230,11 @@ pr_live_...
 Store only hashed API keys.
 
 ### Agent authentication
+
+The current gateway accepts a bearer project API key with the `gateway:invoke`
+scope and an `X-Agent-Id` selector. It verifies that the selected active agent
+matches the key's organisation, project, and environment. The key can invoke as
+any active agent in that project; per-agent credentials are a future option.
 
 Agents may authenticate through:
 
@@ -2639,6 +2658,7 @@ APP_ENV=development
 APP_NAME=PaxRelay
 LOG_LEVEL=INFO
 API_BASE_URL=http://localhost:8000
+API_MAX_REQUEST_BYTES=1048576
 GATEWAY_BASE_URL=http://localhost:8080
 WEB_BASE_URL=http://localhost:3000
 
@@ -2649,7 +2669,10 @@ DATABASE_MAX_OVERFLOW=20
 
 # Redis
 RAILWAY_REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:6379/0
 REDIS_KEY_PREFIX=paxrelay
+API_RATE_LIMIT_MAX_REQUESTS=300
+API_RATE_LIMIT_WINDOW_SECONDS=60
 
 # Authentication
 AUTH_SECRET=replace-me
@@ -2697,6 +2720,10 @@ GATEWAY_REQUEST_TIMEOUT_SECONDS=30
 GATEWAY_CONNECT_TIMEOUT_SECONDS=5
 GATEWAY_MAX_REQUEST_BYTES=1048576
 GATEWAY_MAX_RESPONSE_BYTES=10485760
+GATEWAY_RATE_LIMIT_MAX_REQUESTS=120
+GATEWAY_RATE_LIMIT_WINDOW_SECONDS=60
+# Optional override; enabled by default in staging/production.
+# GATEWAY_RATE_LIMIT_ENABLED=true
 
 # Object storage
 S3_ENDPOINT_URL=
@@ -2706,7 +2733,7 @@ S3_BUCKET=paxrelay-receipts
 S3_REGION=auto
 
 # Webhooks
-WEBHOOK_SIGNING_SECRET=replace-me
+WEBHOOK_ENCRYPTION_KEY=replace-me-with-a-secure-random-string
 WEBHOOK_MAX_ATTEMPTS=8
 WEBHOOK_INITIAL_RETRY_SECONDS=30
 

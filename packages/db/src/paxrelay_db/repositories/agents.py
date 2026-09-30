@@ -47,15 +47,22 @@ class SqlAlchemyAgentRepository:
         self._session = session
 
     async def get(self, agent_id: UUID) -> Agent | None:
-        m = await self._session.get(AgentModel, sid(agent_id))
+        stmt = select(AgentModel).where(
+            AgentModel.id == sid(agent_id), AgentModel.deleted_at.is_(None)
+        )
+        m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_agent(m) if m is not None else None
 
-    async def get_by_slug(self, project_id: UUID, slug: str) -> Agent | None:
+    async def get_by_slug(
+        self, project_id: UUID, slug: str, environment: str | None = None
+    ) -> Agent | None:
         stmt = select(AgentModel).where(
             AgentModel.project_id == sid(project_id),
             AgentModel.slug == slug,
             AgentModel.deleted_at.is_(None),
         )
+        if environment is not None:
+            stmt = stmt.where(AgentModel.environment == environment)
         m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_agent(m) if m is not None else None
 
@@ -68,12 +75,15 @@ class SqlAlchemyAgentRepository:
         offset: int = 0,
         status: str | None = None,
         search: str | None = None,
+        environment: str | None = None,
     ) -> list[Agent]:
         stmt = select(AgentModel).where(
             AgentModel.organisation_id == sid(organisation_id),
             AgentModel.project_id == sid(project_id),
             AgentModel.deleted_at.is_(None),
         )
+        if environment is not None:
+            stmt = stmt.where(AgentModel.environment == environment)
         if status is not None:
             stmt = stmt.where(AgentModel.status == status)
         if search is not None:

@@ -8,9 +8,12 @@ independently of the internal domain layer.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr, field_validator
+
+from paxrelay_api.security.scopes import parse_scopes
 
 
 # ---------------------------------------------------------------------------
@@ -22,8 +25,8 @@ class MoneyIn(BaseModel):
     """A human-friendly monetary amount accepted on input."""
 
     amount_atomic: int = Field(ge=0)
-    currency: str = "USDX"
-    decimals: int = 6
+    currency: Literal["USDX"] = "USDX"
+    decimals: Literal[6] = 6
 
 
 class ErrorBody(BaseModel):
@@ -109,11 +112,13 @@ class ServiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     capability: str = Field(pattern=r"^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*(\.\*)?$")
-    protocols: list[str] = Field(default_factory=lambda: ["http"])
+    protocols: list[Literal["http", "mcp", "grpc"]] = Field(
+        default_factory=lambda: ["http"], min_length=1, max_length=3
+    )
     price_per_call: MoneyIn
-    base_url: str
-    endpoint_url: str
-    version: str = "1.0.0"
+    base_url: str = Field(min_length=8, max_length=2048, pattern=r"^https?://")
+    endpoint_url: str = Field(min_length=8, max_length=2048, pattern=r"^https?://")
+    version: str = Field(default="1.0.0", min_length=1, max_length=32)
     description: str | None = None
 
 
@@ -138,13 +143,13 @@ class ServiceOut(BaseModel):
 class PolicyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str | None = None
-    mode: str = "enforce"
+    mode: Literal["observe", "warn", "enforce"] = "enforce"
     maximum_per_call: MoneyIn | None = None
     daily_budget: MoneyIn | None = None
     monthly_budget: MoneyIn | None = None
-    allowed_capabilities: list[str] = Field(default_factory=list)
-    allowed_providers: list[str] = Field(default_factory=list)
-    blocked_providers: list[str] = Field(default_factory=list)
+    allowed_capabilities: list[str] = Field(default_factory=list, max_length=100)
+    allowed_providers: list[str] = Field(default_factory=list, max_length=100)
+    blocked_providers: list[str] = Field(default_factory=list, max_length=100)
     approval_threshold: MoneyIn | None = None
 
 
@@ -176,13 +181,19 @@ class PolicyAssignmentOut(BaseModel):
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     key_type: str = Field(default="test", pattern=r"^(test|live)$")
-    # Colon-separated capability slugs, e.g. "agents:read:agents:write".
-    # Constrained to prevent arbitrary scope injection before enforcement lands.
+    # Colon-paired grants, e.g. "agents:read:agents:write".
     scopes: str = Field(
-        default="",
+        min_length=1,
         max_length=512,
-        pattern=r"^([a-z][a-z0-9_-]*(:[a-z][a-z0-9_-]*)*)?$",
+        pattern=r"^(?:[a-z][a-z0-9-]*:(?:read|write)|gateway:invoke)(?::(?:[a-z][a-z0-9-]*:(?:read|write)|gateway:invoke))*$",
     )
+    expires_in_days: int = Field(default=90, ge=1, le=365)
+
+    @field_validator("scopes")
+    @classmethod
+    def validate_scopes(cls, value: str) -> str:
+        parse_scopes(value)
+        return value
 
 
 class ApiKeyOut(BaseModel):
@@ -190,6 +201,11 @@ class ApiKeyOut(BaseModel):
     name: str
     key_prefix: str
     key_type: str
+    scopes: str = ""
+    expires_at: datetime | None = None
+    created_at: datetime | None = None
+    last_used_at: datetime | None = None
+    is_active: bool = True
     # The raw key is returned exactly once, at creation time.
     raw_key: str | None = None
 
@@ -236,6 +252,33 @@ class TransactionOut(BaseModel):
     updated_at: datetime
 
 
+class ApprovalDecisionIn(BaseModel):
+    decision: Literal["approved", "rejected"]
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class ApprovalOut(BaseModel):
+    id: UUID
+    tool_call_id: UUID
+    agent_id: UUID
+    capability: str
+    provider_id: UUID | None
+    service_version_id: UUID | None
+    amount_atomic: int
+    currency: str
+    decimals: int
+    recipient_address: str | None
+    request_hash: str | None
+    policy_id: UUID | None
+    policy_version: int | None
+    status: str
+    reason: str | None
+    decision_reason: str | None
+    expires_at: datetime | None
+    decided_at: datetime | None
+    created_at: datetime
+
+
 # ---------------------------------------------------------------------------
 # Analytics
 # ---------------------------------------------------------------------------
@@ -259,6 +302,17 @@ class AnalyticsCapabilityOut(BaseModel):
     call_count: int
 
 
+class AuditLogOut(BaseModel):
+    id: UUID
+    event_type: str
+    actor_id: str
+    resource_type: str
+    resource_id: str
+    details: dict[str, object] | None
+    ip_address: str | None
+    created_at: datetime
+
+
 # ---------------------------------------------------------------------------
 # Webhooks
 # ---------------------------------------------------------------------------
@@ -266,25 +320,46 @@ class AnalyticsCapabilityOut(BaseModel):
 
 class WebhookCreate(BaseModel):
     url: str = Field(min_length=1, max_length=2048, pattern=r"^https?://")
-    event_types: list[str] = Field(min_length=1)
-    secret: str = Field(min_length=16, max_length=128)
-    description: str | None = None
+    event_types: list[str] = Field(min_length=1, max_length=100)
+    secret: SecretStr = Field(min_length=32, max_length=128)
+    description: str | None = Field(default=None, max_length=256)
 
 
 class WebhookUpdate(BaseModel):
     url: str | None = Field(None, min_length=1, max_length=2048, pattern=r"^https?://")
     event_types: list[str] | None = Field(None, min_length=1)
+    secret: SecretStr | None = Field(None, min_length=32, max_length=128)
     is_active: bool | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=256)
 
 
 class WebhookOut(BaseModel):
     id: UUID
     url: str
     event_types: list[str]
+    secret_configured: bool
     is_active: bool
     description: str | None
     created_at: datetime
+
+
+class WebhookDeliveryOut(BaseModel):
+    id: UUID
+    event_type: str
+    status: str
+    attempt_count: int
+    http_status_code: int | None
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
+    next_attempt_at: datetime | None
+    delivered_at: datetime | None
+
+
+class WebhookDeliveryPageOut(BaseModel):
+    items: list[WebhookDeliveryOut]
+    next_cursor_created_at: datetime | None = None
+    next_cursor_id: UUID | None = None
 
 
 # ---------------------------------------------------------------------------

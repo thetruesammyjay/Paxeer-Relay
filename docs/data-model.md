@@ -22,14 +22,10 @@ Organisation
 
 Tenant-owned database rows carry `organisation_id`, `project_id`, and usually
 `environment` (`development`, `staging`, or `production`). Control-plane
-authentication resolves these fields from the API key. List queries should
-filter by both organisation and project. Tool calls carry these columns so
-related payments and receipts can be scoped through their tool call.
-
-Some current single-resource routes check organisation ownership without
-checking project ownership. Treat project isolation as a security requirement
-and audit every `get` and relationship lookup before enabling multiple projects
-per organisation.
+authentication resolves these fields and resource/action scopes from the API
+key. Control-plane lists, single-resource lookups, relationships, receipts,
+and analytics enforce all three tenant values. Tool calls carry these columns
+so related payments and receipts can be scoped through their tool call.
 
 ## Identity and access records
 
@@ -39,12 +35,15 @@ per organisation.
 | `organisations` | Tenant/account boundary | Name, unique slug, plan, active state |
 | `memberships` | User-to-organisation role | User, organisation, role, inviter |
 | `projects` | Tenant subdivision | Organisation/project scope, name, slug, active state |
-| `api_keys` | Machine authentication credential | Prefix, SHA-256 hash, test/live type, scopes, expiry, active state, last use |
+| `api_keys` | Machine authentication credential | Prefix, SHA-256 hash, test/live type, control-plane and `gateway:invoke` scopes, expiry, active state, last use |
 | `agents` | Automated caller identity | Tenant scope, name, slug, wallet, status, metadata |
 | `wallets` | Wallet associated with an agent | Agent, address, primary flag, label |
 
 The API-key creation route returns the raw key once; only its prefix and hash
-are persisted. Human users, organisations, and memberships exist in the
+are persisted. A CLI bootstraps the first organisation, project, and scoped
+key; scoped keys can be inventoried and revoked through the API. Gateway keys
+are project-scoped and may select active agents within that project. Human users,
+organisations, and memberships exist in the
 database model but do not yet have corresponding control-plane routes in this
 checkout.
 
@@ -73,6 +72,7 @@ a placeholder.
 | `tool_calls` | One logical agent request, with tenant scope, capability, arguments, request hash, idempotency key, and independent request/payment/execution states |
 | `route_decisions` | Provider/service version selected for the call, strategy, score, breakdown, explanation, and attempt number |
 | `quotes` | Immutable payment requirement: amount, recipient, chain, request hash, nonce, and expiry |
+| `budget_reservations` | Per-agent amount held against daily/monthly policy budgets while a quote is valid; expired quotes stop counting, and verified payment consumes the reservation atomically |
 | `payment_intents` | Intended payment associated with a quote and tool call |
 | `payments` | Submitted/verified payment proof, LayerX references, and settlement timestamps |
 | `execution_attempts` | Each provider forward attempt, status, HTTP code, timestamps, latency, and retryability |
@@ -94,15 +94,15 @@ LayerX-verified record. A call can be paid and still fail at the provider.
 
 | Table | Purpose |
 | --- | --- |
-| `approval_requests` | Durable human decision request model; current gateway policy response does not yet create a complete approval workflow |
-| `webhook_endpoints` | Tenant URL, event subscriptions, hashed secret, active state |
-| `webhook_deliveries` | Per-event delivery attempt and outcome |
-| `audit_logs` | Actor/action/resource audit record |
-| `outbox_events` | Transactional event queue for background publication |
+| `approval_requests` | Tenant-scoped policy decision, bound to the original route, amount, recipient, and policy version |
+| `webhook_endpoints` | Tenant URL, event subscriptions, secret digest and authenticated-encrypted secret, active state |
+| `webhook_deliveries` | Per-event attempt count, lease, retry time, HTTP status, and terminal outcome |
+| `audit_logs` | Tenant/environment-scoped actor/action/resource record with safe event metadata, peer IP, and request ID |
+| `outbox_events` | Tenant-scoped transactional events, inserted with supported audited API changes and consumed into webhook delivery rows |
 
-The schema has webhook delivery and outbox tables, but the worker handlers that
-should deliver events are stubs. Their existence in PostgreSQL does not mean
-the event pipeline is operational.
+The worker fans supported events into durable webhook delivery rows, then sends
+them with at-least-once semantics. A delivery row marked `delivered` records a
+2xx response; it does not prove that the subscriber processed the event.
 
 ## Monetary and identifier rules
 

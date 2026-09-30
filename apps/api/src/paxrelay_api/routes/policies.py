@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from paxrelay_domain import Policy, PolicyAssignment, PolicyMode, PolicyRules
-from paxrelay_db.repositories import SqlAlchemyPolicyRepository
+from paxrelay_db.repositories import SqlAlchemyAgentRepository, SqlAlchemyPolicyRepository
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
+from paxrelay_api.audit import record_change
 from paxrelay_api.exceptions import NotFoundError
 from paxrelay_api.schemas import (
     PolicyAssignIn,
@@ -17,6 +18,8 @@ from paxrelay_api.schemas import (
     PolicyCreate,
     PolicyOut,
 )
+from paxrelay_api.security.authorization import require_scope
+from paxrelay_api.tenant import tenant_owns
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -32,9 +35,15 @@ def _money_to_atomic(value) -> dict | None:
     }
 
 
-@router.post("", response_model=PolicyOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=PolicyOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope("policies:write"))],
+)
 async def create_policy(
     body: PolicyCreate,
+    request: Request,
     session: SessionDep,
     tenant: TenantDep,
 ) -> PolicyOut:
@@ -51,12 +60,22 @@ async def create_policy(
     policy = Policy(
         organisation_id=tenant.organisation_id,
         project_id=tenant.project_id,
+        environment=tenant.environment,
         name=body.name,
         description=body.description,
         mode=PolicyMode(body.mode),
         rules=rules,
     )
     saved = await repo.save(policy)
+    await record_change(
+        request=request,
+        session=session,
+        tenant=tenant,
+        event_type="policy.created",
+        resource_type="policy",
+        resource_id=saved.id,
+        details={"name": saved.name, "mode": saved.mode.value},
+    )
     return PolicyOut(
         id=saved.id,
         name=saved.name,
@@ -67,7 +86,11 @@ async def create_policy(
     )
 
 
-@router.get("", response_model=list[PolicyOut])
+@router.get(
+    "",
+    response_model=list[PolicyOut],
+    dependencies=[Depends(require_scope("policies:read"))],
+)
 async def list_policies(
     session: SessionDep,
     tenant: TenantDep,
@@ -86,6 +109,7 @@ async def list_policies(
         mode=mode,
         is_active=is_active,
         search=search,
+        environment=tenant.environment,
     )
     return [
         PolicyOut(
@@ -100,12 +124,16 @@ async def list_policies(
     ]
 
 
-@router.get("/{policy_id}", response_model=PolicyOut)
+@router.get(
+    "/{policy_id}",
+    response_model=PolicyOut,
+    dependencies=[Depends(require_scope("policies:read"))],
+)
 async def get_policy(policy_id: UUID, session: SessionDep, tenant: TenantDep) -> PolicyOut:
     repo = SqlAlchemyPolicyRepository(session)
     policy = await repo.get(policy_id)
     # Treat a cross-tenant resource as not-found to avoid information leakage.
-    if policy is None or policy.organisation_id != tenant.organisation_id:
+    if policy is None or not tenant_owns(tenant, policy):
         raise NotFoundError(f"Policy {policy_id} not found.")
     return PolicyOut(
         id=policy.id,
@@ -117,19 +145,38 @@ async def get_policy(policy_id: UUID, session: SessionDep, tenant: TenantDep) ->
     )
 
 
-@router.post("/{policy_id}/assign", response_model=PolicyAssignmentOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{policy_id}/assign",
+    response_model=PolicyAssignmentOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope("policies:write"))],
+)
 async def assign_policy(
     policy_id: UUID,
     body: PolicyAssignIn,
+    request: Request,
     session: SessionDep,
     tenant: TenantDep,
 ) -> PolicyAssignmentOut:
     repo = SqlAlchemyPolicyRepository(session)
     policy = await repo.get(policy_id)
     # Verify ownership so callers cannot assign policies from other tenants.
-    if policy is None or policy.organisation_id != tenant.organisation_id:
+    if policy is None or not tenant_owns(tenant, policy):
         raise NotFoundError(f"Policy {policy_id} not found.")
+
+    agent = await SqlAlchemyAgentRepository(session).get(body.agent_id)
+    if agent is None or not tenant_owns(tenant, agent):
+        raise NotFoundError(f"Agent {body.agent_id} not found.")
     assignment = await repo.assign(PolicyAssignment(agent_id=body.agent_id, policy_id=policy_id))
+    await record_change(
+        request=request,
+        session=session,
+        tenant=tenant,
+        event_type="policy.assigned",
+        resource_type="policy_assignment",
+        resource_id=assignment.id,
+        details={"policy_id": str(policy_id), "agent_id": str(body.agent_id)},
+    )
     return PolicyAssignmentOut(
         id=assignment.id,
         agent_id=assignment.agent_id,

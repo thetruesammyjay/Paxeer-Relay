@@ -20,6 +20,7 @@ dependencies = [
     "paxrelay-policy",
     "paxrelay-router",
     "paxrelay-paxeer",
+    "paxrelay-receipts",
 ]
 
 [tool.uv.sources]
@@ -28,6 +29,7 @@ paxrelay-domain = { workspace = true }
 paxrelay-policy = { workspace = true }
 paxrelay-router = { workspace = true }
 paxrelay-paxeer = { workspace = true }
+paxrelay-receipts = { workspace = true }
 
 [project.optional-dependencies]
 dev = [

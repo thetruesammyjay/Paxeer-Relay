@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from paxrelay_domain.types import CapabilitySlug, MonetaryAmount
+from paxrelay_domain.types import CapabilitySlug, Environment, MonetaryAmount
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +127,7 @@ class Policy(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     organisation_id: UUID
     project_id: UUID
+    environment: Environment = Environment.DEVELOPMENT
     name: str = Field(min_length=1, max_length=128)
     description: str | None = None
     mode: PolicyMode = PolicyMode.ENFORCE

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import httpx
@@ -9,6 +10,8 @@ import httpx
 from paxrelay_paxeer.layerx import LayerXClient
 from paxrelay_paxeer.lxp402 import verify_requirement_fields
 from paxrelay_paxeer.settlement import SettlementClient
+
+_TRANSACTION_HASH = re.compile(r"0x[0-9a-fA-F]{64}")
 
 
 class OfficialPaxeerAdapter:
@@ -133,9 +136,16 @@ class OfficialPaxeerAdapter:
         if not ok:
             return {"verified": False, "reason": reason}
 
-        tx_hash = proof_claims.get("layerx_transaction_hash", "")
-        if not tx_hash:
+        tx_hash = proof_claims.get("layerx_transaction_hash")
+        if not isinstance(tx_hash, str) or not tx_hash:
             return {"verified": False, "reason": "missing_transaction_hash"}
+
+        batch_id = proof_claims.get("layerx_batch_id")
+        if batch_id is not None and (
+            not isinstance(batch_id, str)
+            or _TRANSACTION_HASH.fullmatch(batch_id) is None
+        ):
+            return {"verified": False, "reason": "invalid_batch_id"}
 
         ok2, reason2 = await self._layerx.verify_transaction_matches_quote(
             tx_hash=tx_hash,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from paxrelay_domain import ExecutionReceipt
@@ -19,6 +19,7 @@ from paxrelay_db.repositories._common import sid
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
 from paxrelay_api.schemas import ReceiptOut
+from paxrelay_api.security.authorization import require_scope
 
 router = APIRouter(prefix="/receipts", tags=["receipts"])
 
@@ -47,7 +48,11 @@ def _receipt_out(receipt: ExecutionReceipt) -> ReceiptOut:
     )
 
 
-@router.get("", response_model=list[ReceiptOut])
+@router.get(
+    "",
+    response_model=list[ReceiptOut],
+    dependencies=[Depends(require_scope("receipts:read"))],
+)
 async def list_receipts(
     session: SessionDep,
     tenant: TenantDep,
@@ -68,6 +73,7 @@ async def list_receipts(
         .where(
             ToolCallModel.organisation_id == sid(tenant.organisation_id),
             ToolCallModel.project_id == sid(tenant.project_id),
+            ToolCallModel.environment == tenant.environment,
         )
         .order_by(ExecutionReceiptModel.issued_at.desc())
         .limit(limit)

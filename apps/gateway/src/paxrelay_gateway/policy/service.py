@@ -6,9 +6,9 @@ from paxrelay_domain import (
     Policy,
     PolicyDecision,
     PolicyEvaluationRequest,
-    PolicyEvaluator,
     PolicyEvaluationResult,
 )
+from paxrelay_policy import PolicyEvaluator
 
 
 class PolicyGateError(Exception):

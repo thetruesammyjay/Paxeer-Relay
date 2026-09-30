@@ -715,6 +715,7 @@ dependencies = [
     { name = "paxrelay-domain" },
     { name = "paxrelay-paxeer" },
     { name = "paxrelay-policy" },
+    { name = "paxrelay-receipts" },
     { name = "paxrelay-router" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -745,6 +746,7 @@ requires-dist = [
     { name = "paxrelay-domain", editable = "packages/domain" },
     { name = "paxrelay-paxeer", editable = "packages/paxeer-adapter" },
     { name = "paxrelay-policy", editable = "packages/policy-engine" },
+    { name = "paxrelay-receipts", editable = "packages/receipts" },
     { name = "paxrelay-router", editable = "packages/provider-router" },
     { name = "pydantic", specifier = "~=2.9" },
     { name = "pydantic-settings", specifier = "~=2.6" },
@@ -797,6 +799,7 @@ source = { editable = "apps/gateway" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "httpcore" },
     { name = "httpx" },
     { name = "paxrelay-db" },
     { name = "paxrelay-domain" },
@@ -822,6 +825,7 @@ dev = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpcore", specifier = ">=1.0.9,<2" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
     { name = "paxrelay-db", editable = "packages/db" },
@@ -962,6 +966,7 @@ version = "0.1.0"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "asyncpg" },
+    { name = "httpcore" },
     { name = "httpx" },
     { name = "paxrelay-db" },
     { name = "paxrelay-domain" },
@@ -982,6 +987,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
+    { name = "httpcore", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "paxrelay-db", editable = "packages/db" },
     { name = "paxrelay-domain", editable = "packages/domain" },

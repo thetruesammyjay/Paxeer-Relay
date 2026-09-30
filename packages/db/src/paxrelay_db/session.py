@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from paxrelay_db.urls import normalize_async_database_url
+
 # Module-level engine and session factory — initialised by configure_database()
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -29,6 +31,8 @@ def configure_database(
         postgresql+asyncpg://user:pass@host/dbname
     """
     global _engine, _session_factory
+
+    database_url = normalize_async_database_url(database_url)
 
     _engine = create_async_engine(
         database_url,

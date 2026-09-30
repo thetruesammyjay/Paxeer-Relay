@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paxrelay_domain import (
@@ -18,13 +20,15 @@ from paxrelay_domain import (
     RequestState,
     ToolCall,
 )
+from paxrelay_db.models.agents import AgentModel
+from paxrelay_db.models.budget import BudgetReservationModel
+from paxrelay_db.models.executions import ExecutionAttemptModel
 from paxrelay_db.models.payments import (
     PaymentIntentModel,
     PaymentModel,
     QuoteModel,
     ToolCallModel,
 )
-from paxrelay_db.models.executions import ExecutionAttemptModel
 from paxrelay_db.repositories._common import as_uuid, sid
 
 
@@ -166,6 +170,16 @@ class SqlAlchemyToolCallRepository:
         )
         m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_tool_call(m) if m is not None else None
+
+    async def lock_idempotency_key(
+        self,
+        agent_id: UUID,
+        idempotency_key: str,
+    ) -> None:
+        """Serialize concurrent requests using the same per-agent key."""
+        digest = hashlib.sha256(agent_id.bytes + b"\0" + idempotency_key.encode()).digest()
+        lock_key = int.from_bytes(digest[:8], byteorder="big", signed=True)
+        await self._session.execute(select(func.pg_advisory_xact_lock(lock_key)))
 
     async def list(
         self,
@@ -347,15 +361,52 @@ class SqlAlchemyPaymentRepository:
         await self._session.refresh(m)
         return _to_payment(m)
 
-    async def is_nonce_used(self, nonce: str) -> bool:
-        """A nonce is 'used' once its quote has been marked consumed."""
-        stmt = select(QuoteModel.is_used).where(QuoteModel.nonce == nonce)
-        used = (await self._session.execute(stmt)).scalars().first()
-        return bool(used)
+    async def consume_nonce(
+        self,
+        quote_id: UUID,
+        nonce: str,
+        agent_id: UUID,
+    ) -> bool:
+        """Atomically claim a quote nonce and serialize budget conversion."""
+        owner_stmt = (
+            select(ToolCallModel.agent_id)
+            .join(QuoteModel, QuoteModel.tool_call_id == ToolCallModel.id)
+            .where(QuoteModel.id == sid(quote_id), QuoteModel.nonce == nonce)
+        )
+        quote_owner = (await self._session.execute(owner_stmt)).scalar_one_or_none()
+        if quote_owner != sid(agent_id):
+            return False
 
-    async def mark_nonce_used(self, nonce: str, payment_id: UUID) -> None:
-        stmt = select(QuoteModel).where(QuoteModel.nonce == nonce)
-        m = (await self._session.execute(stmt)).scalar_one_or_none()
-        if m is not None:
-            m.is_used = True
-            await self._session.flush()
+        lock_stmt = (
+            select(AgentModel.id)
+            .where(AgentModel.id == sid(agent_id))
+            .with_for_update()
+        )
+        if (await self._session.execute(lock_stmt)).scalar_one_or_none() is None:
+            return False
+
+        stmt = (
+            update(QuoteModel)
+            .where(
+                QuoteModel.id == sid(quote_id),
+                QuoteModel.nonce == nonce,
+                QuoteModel.is_used.is_(False),
+            )
+            .values(is_used=True)
+            .returning(QuoteModel.id)
+        )
+        result = await self._session.execute(stmt)
+        consumed = result.scalar_one_or_none() is not None
+        if not consumed:
+            return False
+
+        reservation_stmt = (
+            update(BudgetReservationModel)
+            .where(
+                BudgetReservationModel.quote_id == sid(quote_id),
+                BudgetReservationModel.status == "active",
+            )
+            .values(status="consumed", consumed_at=datetime.utcnow())
+        )
+        await self._session.execute(reservation_stmt)
+        return True

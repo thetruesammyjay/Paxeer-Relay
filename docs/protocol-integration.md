@@ -52,8 +52,10 @@ atomic amount, recipient, quote ID, request hash, expiry, and nonce.
 Before adapter verification, the gateway compares proof claims to the stored
 quote and rejects an expired quote or mismatched quote ID, request hash,
 amount, recipient, nonce, chain ID, or scheme. The official adapter then
-requires a LayerX transaction hash and queries LayerX to confirm amount,
-recipient, and quote ID (or memo).
+requires a 32-byte hexadecimal LayerX transaction hash and queries LayerX to
+confirm amount, recipient, and quote ID (or memo). The proof must decode to a
+JSON object. Amounts must be integers or decimal integer strings; malformed
+claims and malformed LayerX JSON are rejected as failed verification.
 
 The official code currently expects the submitted proof to be JSON containing
 those fields. It does not implement wallet signing, transaction submission,
@@ -77,7 +79,9 @@ Before an adapter can be considered production-ready:
 3. Use authenticated TLS connections and bounded timeouts.
 4. Parse amounts as integers and verify recipient, currency, quote, chain,
    nonce, expiry, and settlement destination from authoritative data.
-5. Make nonce consumption atomic and durable under concurrent submissions.
+5. Verify the gateway's atomic PostgreSQL nonce claim with concurrent
+   submissions, then validate LayerX transaction replay semantics against the
+   authoritative service.
 6. Define what “verified”, LayerX-settled, and L1-anchored mean and how to
    transition among them.
 7. Add adapter contract tests against a controlled simulator and a staging

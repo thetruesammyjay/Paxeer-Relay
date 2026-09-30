@@ -220,7 +220,10 @@ class SqlAlchemyProviderRepository:
         self._session = session
 
     async def get(self, provider_id: UUID) -> Provider | None:
-        m = await self._session.get(ProviderModel, sid(provider_id))
+        stmt = select(ProviderModel).where(
+            ProviderModel.id == sid(provider_id), ProviderModel.deleted_at.is_(None)
+        )
+        m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_provider(m) if m is not None else None
 
     async def list_active(
@@ -253,6 +256,7 @@ class SqlAlchemyProviderRepository:
         offset: int = 0,
         status: str | None = None,
         search: str | None = None,
+        environment: str | None = None,
     ) -> list[Provider]:
         """Tenant-scoped provider listing with optional status/search filters.
 
@@ -265,6 +269,8 @@ class SqlAlchemyProviderRepository:
             ProviderModel.project_id == sid(project_id),
             ProviderModel.deleted_at.is_(None),
         )
+        if environment is not None:
+            stmt = stmt.where(ProviderModel.environment == environment)
         if status is not None:
             stmt = stmt.where(ProviderModel.status == status)
         if search is not None:
@@ -299,7 +305,10 @@ class SqlAlchemyProviderRepository:
         return _to_provider(m)
 
     async def get_service(self, service_id: UUID) -> Service | None:
-        m = await self._session.get(ServiceModel, sid(service_id))
+        stmt = select(ServiceModel).where(
+            ServiceModel.id == sid(service_id), ServiceModel.deleted_at.is_(None)
+        )
+        m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_service(m) if m is not None else None
 
     async def list_services(self, provider_id: UUID) -> list[Service]:
@@ -320,15 +329,18 @@ class SqlAlchemyProviderRepository:
         project_id: UUID,
         *,
         limit: int = 100,
+        environment: str | None = None,
     ) -> list[Service]:
         """Tenant-scoped service listing (convenience beyond the Protocol)."""
+        stmt = select(ServiceModel).where(
+            ServiceModel.organisation_id == sid(organisation_id),
+            ServiceModel.project_id == sid(project_id),
+            ServiceModel.deleted_at.is_(None),
+        )
+        if environment is not None:
+            stmt = stmt.where(ServiceModel.environment == environment)
         stmt = (
-            select(ServiceModel)
-            .where(
-                ServiceModel.organisation_id == sid(organisation_id),
-                ServiceModel.project_id == sid(project_id),
-                ServiceModel.deleted_at.is_(None),
-            )
+            stmt
             .order_by(ServiceModel.created_at.desc())
             .limit(limit)
         )

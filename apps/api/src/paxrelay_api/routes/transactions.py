@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from paxrelay_db.models.payments import ToolCallModel
@@ -17,6 +17,7 @@ from paxrelay_db.repositories._common import sid
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
 from paxrelay_api.schemas import TransactionOut
+from paxrelay_api.security.authorization import require_scope
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -35,7 +36,11 @@ def _transaction_out(m: ToolCallModel) -> TransactionOut:
     )
 
 
-@router.get("", response_model=list[TransactionOut])
+@router.get(
+    "",
+    response_model=list[TransactionOut],
+    dependencies=[Depends(require_scope("transactions:read"))],
+)
 async def list_transactions(
     session: SessionDep,
     tenant: TenantDep,
@@ -53,6 +58,7 @@ async def list_transactions(
         .where(
             ToolCallModel.organisation_id == sid(tenant.organisation_id),
             ToolCallModel.project_id == sid(tenant.project_id),
+            ToolCallModel.environment == tenant.environment,
         )
         .order_by(ToolCallModel.created_at.desc())
     )

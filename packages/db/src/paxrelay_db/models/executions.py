@@ -5,7 +5,19 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +76,15 @@ class SettlementRecordModel(Base, TimestampMixin):
 
 class ApprovalRequestModel(Base, TenantMixin, TimestampMixin):
     __tablename__ = "approval_requests"
+    __table_args__ = (
+        UniqueConstraint("tool_call_id", name="uq_approval_request_tool_call"),
+        Index(
+            "ix_approval_expiration_pending",
+            "expires_at",
+            "id",
+            postgresql_where=text("status IN ('pending', 'approved')"),
+        ),
+    )
     id: Mapped[str] = pk_uuid()
     tool_call_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)
     agent_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)
@@ -71,7 +92,14 @@ class ApprovalRequestModel(Base, TenantMixin, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(16), nullable=False)
     currency_decimals: Mapped[int] = mapped_column(Integer, nullable=False)
     capability: Mapped[str] = mapped_column(String(256), nullable=False)
+    provider_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
+    service_version_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
+    recipient_address: Mapped[str | None] = mapped_column(String(42), nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
+    policy_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
+    policy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    decision_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     decided_by: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -83,13 +111,30 @@ class WebhookEndpointModel(Base, TenantMixin, TimestampMixin):
     id: Mapped[str] = pk_uuid()
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     event_types: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # Keep the digest for auditing/legacy compatibility. The encrypted value
+    # is required by the delivery worker to create an HMAC signature.
     secret_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    secret_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
 
 class WebhookDeliveryModel(Base, TimestampMixin):
     __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        Index(
+            "ix_webhook_delivery_due",
+            "next_attempt_at",
+            "created_at",
+            "id",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index(
+            "ix_webhook_delivery_stale_claim",
+            "claimed_at",
+            postgresql_where=text("status = 'processing'"),
+        ),
+    )
     id: Mapped[str] = pk_uuid()
     endpoint_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -99,6 +144,9 @@ class WebhookDeliveryModel(Base, TimestampMixin):
     http_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class AuditLogModel(Base, TenantMixin, TimestampMixin):
@@ -115,6 +163,14 @@ class AuditLogModel(Base, TenantMixin, TimestampMixin):
 class OutboxEventModel(Base, TenantMixin, TimestampMixin):
     """Transactional outbox pattern — events written atomically with business data."""
     __tablename__ = "outbox_events"
+    __table_args__ = (
+        Index(
+            "ix_outbox_pending_created",
+            "created_at",
+            "id",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
     id: Mapped[str] = pk_uuid()
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)

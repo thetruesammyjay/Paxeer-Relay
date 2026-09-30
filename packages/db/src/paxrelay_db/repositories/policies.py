@@ -2,7 +2,7 @@
 
 Policy rules are stored as a JSON blob (``rules_json``) that round-trips the
 frozen :class:`PolicyRules` domain object. Daily/monthly spend is aggregated
-from verified payments.
+from verified payments and unexpired quote reservations.
 """
 
 from __future__ import annotations
@@ -10,16 +10,20 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paxrelay_domain import (
+    Agent,
     Environment,
     Policy,
     PolicyAssignment,
     PolicyMode,
     PolicyRules,
+    Quote,
 )
+from paxrelay_db.models.agents import AgentModel
+from paxrelay_db.models.budget import BudgetReservationModel
 from paxrelay_db.models.payments import PaymentModel
 from paxrelay_db.models.policies import PolicyAssignmentModel, PolicyModel
 from paxrelay_db.repositories._common import as_uuid, sid
@@ -30,6 +34,7 @@ def _to_policy(m: PolicyModel) -> Policy:
         id=as_uuid(m.id),
         organisation_id=as_uuid(m.organisation_id),
         project_id=as_uuid(m.project_id),
+        environment=Environment(m.environment),
         name=m.name,
         description=m.description,
         mode=PolicyMode(m.mode),
@@ -59,7 +64,10 @@ class SqlAlchemyPolicyRepository:
         self._session = session
 
     async def get(self, policy_id: UUID) -> Policy | None:
-        m = await self._session.get(PolicyModel, sid(policy_id))
+        stmt = select(PolicyModel).where(
+            PolicyModel.id == sid(policy_id), PolicyModel.deleted_at.is_(None)
+        )
+        m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_policy(m) if m is not None else None
 
     async def get_active_for_agent(self, agent_id: UUID) -> Policy | None:
@@ -88,11 +96,15 @@ class SqlAlchemyPolicyRepository:
         mode: str | None = None,
         is_active: bool | None = None,
         search: str | None = None,
+        environment: str | None = None,
     ) -> list[Policy]:
         stmt = select(PolicyModel).where(
             PolicyModel.organisation_id == sid(organisation_id),
             PolicyModel.project_id == sid(project_id),
+            PolicyModel.deleted_at.is_(None),
         )
+        if environment is not None:
+            stmt = stmt.where(PolicyModel.environment == environment)
         if mode is not None:
             stmt = stmt.where(PolicyModel.mode == mode)
         if is_active is not None:
@@ -112,6 +124,7 @@ class SqlAlchemyPolicyRepository:
             self._session.add(m)
         m.organisation_id = sid(policy.organisation_id)
         m.project_id = sid(policy.project_id)
+        m.environment = policy.environment.value
         m.name = policy.name
         m.description = policy.description
         m.mode = policy.mode.value
@@ -135,17 +148,69 @@ class SqlAlchemyPolicyRepository:
         await self._session.refresh(m)
         return _to_assignment(m)
 
+    async def lock_agent_for_budget(self, agent_id: UUID) -> bool:
+        """Serialize budget checks and reservations for one agent."""
+        stmt = (
+            select(AgentModel.id)
+            .where(AgentModel.id == sid(agent_id), AgentModel.deleted_at.is_(None))
+            .with_for_update()
+        )
+        locked = (await self._session.execute(stmt)).scalar_one_or_none() is not None
+        if not locked:
+            return False
+
+        expire_stmt = (
+            update(BudgetReservationModel)
+            .where(
+                BudgetReservationModel.agent_id == sid(agent_id),
+                BudgetReservationModel.status == "active",
+                BudgetReservationModel.expires_at <= datetime.utcnow(),
+            )
+            .values(status="expired")
+        )
+        await self._session.execute(expire_stmt)
+        return True
+
+    async def reserve_budget(self, agent: Agent, quote: Quote) -> None:
+        """Hold the quote amount against this agent's budget until expiry."""
+        reservation = BudgetReservationModel(
+            organisation_id=sid(agent.organisation_id),
+            project_id=sid(agent.project_id),
+            environment=agent.environment.value,
+            agent_id=sid(agent.id),
+            quote_id=sid(quote.id),
+            amount_atomic=quote.amount.amount_atomic,
+            currency=quote.amount.currency.value,
+            status="active",
+            expires_at=quote.expires_at,
+        )
+        self._session.add(reservation)
+        await self._session.flush()
+
     async def _spend_since(self, agent_id: UUID, since: datetime) -> int:
+        now = datetime.utcnow()
         stmt = select(func.coalesce(func.sum(PaymentModel.amount_atomic), 0)).where(
             PaymentModel.agent_id == sid(agent_id),
             PaymentModel.state.in_(("verified", "settled_layerx", "anchored_l1")),
             PaymentModel.created_at >= since,
         )
-        total = (await self._session.execute(stmt)).scalar_one()
-        return int(total or 0)
+        paid = (await self._session.execute(stmt)).scalar_one()
+        reservation_stmt = select(
+            func.coalesce(func.sum(BudgetReservationModel.amount_atomic), 0)
+        ).where(
+            BudgetReservationModel.agent_id == sid(agent_id),
+            BudgetReservationModel.status == "active",
+            BudgetReservationModel.created_at >= since,
+            BudgetReservationModel.expires_at > now,
+        )
+        reserved = (await self._session.execute(reservation_stmt)).scalar_one()
+        return int(paid or 0) + int(reserved or 0)
 
     async def get_daily_spend(self, agent_id: UUID) -> int:
         return await self._spend_since(agent_id, datetime.utcnow() - timedelta(days=1))
 
     async def get_monthly_spend(self, agent_id: UUID) -> int:
-        return await self._spend_since(agent_id, datetime.utcnow() - timedelta(days=30))
+        return await self._spend_since(
+            agent_id,
+            datetime.utcnow() - timedelta(days=30),
+        )

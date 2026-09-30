@@ -4,7 +4,8 @@ Runs a set of async loops in parallel:
   - settlement reconciliation (polls LayerX and Paxeer L1)
   - provider health indexing (feeds scoring data into paxrelay_db)
   - analytics aggregation (materialises hourly/daily spend rows)
-  - outbox event consumer (drains the DB outbox into the event bus)
+  - outbox fan-out (creates durable webhook delivery rows)
+  - webhook delivery (sends signed events with bounded retries)
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ import logging
 from paxrelay_db import close_database, configure_database
 
 from paxrelay_worker.config import get_settings
-from paxrelay_worker.jobs.reconciliation import ReconciliationJob
-from paxrelay_worker.jobs.indexing import ProviderIndexJob
 from paxrelay_worker.jobs.analytics import AnalyticsJob
-from paxrelay_worker.jobs.outbox import OutboxJob
+from paxrelay_worker.jobs.approvals import ApprovalExpirationJob
 from paxrelay_worker.jobs.health import HealthCheckJob
+from paxrelay_worker.jobs.indexing import ProviderIndexJob
+from paxrelay_worker.jobs.outbox import OutboxJob
+from paxrelay_worker.jobs.reconciliation import ReconciliationJob
+from paxrelay_worker.jobs.webhooks import WebhookDeliveryJob
 
 
 async def run() -> None:
@@ -37,9 +40,11 @@ async def run() -> None:
     try:
         await asyncio.gather(
             ReconciliationJob(settings).run(),
+            ApprovalExpirationJob(settings).run(),
             ProviderIndexJob(settings).run(),
             AnalyticsJob(settings).run(),
             OutboxJob(settings).run(),
+            WebhookDeliveryJob(settings).run(),
             HealthCheckJob(settings).run(),
         )
     finally:

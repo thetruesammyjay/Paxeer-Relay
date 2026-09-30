@@ -17,17 +17,22 @@ from sqlalchemy import pool
 # Import the metadata and ALL models so target_metadata is complete for
 # autogenerate and so metadata.create_all covers every table.
 from paxrelay_db.base import Base
+from paxrelay_db.urls import normalize_async_database_url
 import paxrelay_db  # noqa: F401  (imports every model via the package __init__)
 
 config = context.config
 
 # Inject the runtime database URL. Alembic runs synchronously under the hood,
 # but our engine is async, so we keep the asyncpg driver here.
-_database_url = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/paxrelay",
+_database_url = normalize_async_database_url(
+    os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/paxrelay",
+    )
 )
-config.set_main_option("sqlalchemy.url", _database_url)
+# Alembic's ConfigParser interpolates percent signs; double them so URL-encoded
+# credentials (common in managed PostgreSQL connection strings) reach asyncpg.
+config.set_main_option("sqlalchemy.url", _database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

@@ -3,11 +3,11 @@
 Flow
 ----
 1. Extract the ``Bearer <token>`` credential from the ``Authorization`` header.
-2. Derive the 8-char key prefix from the token and query ``api_keys`` by it.
+2. Derive the stored key prefix from the token and query ``api_keys`` by it.
 3. Compute SHA-256 of the presented token and compare to the stored hash in
    constant time (``secrets.compare_digest``).
 4. Verify the key is active and not expired.
-5. Update ``last_used_at`` asynchronously (fire-and-forget on the same session).
+5. Parse the key's grants and update ``last_used_at`` in the request session.
 6. Return a :class:`TenantContext` populated from the key's tenant columns.
 
 The function is used as a FastAPI dependency — it raises ``UnauthorizedError``
@@ -18,17 +18,20 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paxrelay_db import ApiKey
-from paxrelay_db import get_session
+from paxrelay_db import ApiKey, Organisation, Project, get_session
 
+from paxrelay_api.config import get_settings
 from paxrelay_api.exceptions import UnauthorizedError
+from paxrelay_api.security.rate_limit import enforce_api_key_limit
+from paxrelay_api.security.scopes import parse_scopes
 from paxrelay_api.tenant import TenantContext
 
 # Re-use the shared get_session dependency; auth happens at the same DB session
@@ -43,6 +46,8 @@ def _sha256_hex(value: str) -> str:
 
 
 async def verify_api_key(
+    request: Request,
+    response: Response,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: AsyncSession = Depends(get_session),
 ) -> TenantContext:
@@ -52,12 +57,12 @@ async def verify_api_key(
     All failure paths return the same generic message to prevent oracle attacks.
     """
     if credentials is None or not credentials.credentials:
-        raise UnauthorizedError("Missing or malformed Authorization header.")
+        raise UnauthorizedError("Invalid or expired API key.")
 
     raw_key = credentials.credentials
 
     if len(raw_key) < _KEY_PREFIX_LEN:
-        raise UnauthorizedError("Invalid API key.")
+        raise UnauthorizedError("Invalid or expired API key.")
 
     key_prefix = raw_key[:_KEY_PREFIX_LEN]
     key_hash = _sha256_hex(raw_key)
@@ -71,16 +76,18 @@ async def verify_api_key(
             ApiKey.deleted_at.is_(None),
         )
     )
-    row: ApiKey | None = result.scalar_one_or_none()
+    candidates = result.scalars().all()
 
-    # Constant-time comparison even when no row was found (avoids timing oracle).
-    stored_hash = row.key_hash if row is not None else ("0" * 64)
-    if not secrets.compare_digest(stored_hash, key_hash):
-        raise UnauthorizedError("Invalid API key.")
-
-    # Guard: row must not be None at this point (compare_digest would have
-    # already differed), but make the type-narrowing explicit.
-    assert row is not None  # noqa: S101
+    # Prefixes are indexed but not unique. Compare every candidate so a rare
+    # prefix collision does not turn valid credentials into a server error.
+    row: ApiKey | None = None
+    for candidate in candidates:
+        if secrets.compare_digest(candidate.key_hash, key_hash):
+            row = candidate
+    if not candidates:
+        secrets.compare_digest("0" * 64, key_hash)
+    if row is None:
+        raise UnauthorizedError("Invalid or expired API key.")
 
     # Reject expired keys.
     now = datetime.now(UTC)
@@ -92,20 +99,78 @@ async def verify_api_key(
             else row.expires_at
         )
         if now > expires:
-            raise UnauthorizedError("API key has expired.")
+            raise UnauthorizedError("Invalid or expired API key.")
 
-    # Stamp last_used_at — same session, committed with the rest of the request.
-    await session.execute(
-        update(ApiKey)
-        .where(ApiKey.id == row.id)
-        .values(last_used_at=now.replace(tzinfo=None))  # store naive UTC, matching schema
-        .execution_options(synchronize_session=False)
+    project, organisation = await _get_active_tenant(session, row)
+    if project is None or organisation is None:
+        raise UnauthorizedError("Invalid or expired API key.")
+
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    expected_environment = (
+        "development" if settings.app_env in {"development", "test"} else settings.app_env
     )
+    if row.environment != expected_environment:
+        raise UnauthorizedError("Invalid or expired API key.")
 
-    from uuid import UUID
+    try:
+        scopes = parse_scopes(row.scopes)
+    except ValueError as exc:
+        # Corrupt or pre-scope-format values are never interpreted as broad
+        # grants. The key must be rotated with a valid scope set.
+        raise UnauthorizedError("Invalid or expired API key.") from exc
 
-    return TenantContext(
+    tenant = TenantContext(
         organisation_id=UUID(str(row.organisation_id)),
         project_id=UUID(str(row.project_id)),
         environment=row.environment,
+        scopes=scopes,
+        api_key_id=UUID(str(row.id)),
     )
+    await enforce_api_key_limit(
+        request=request,
+        response=response,
+        tenant=tenant,
+        settings=settings,
+    )
+
+    # Refresh at most once per minute. This keeps key inventory useful without
+    # making concurrent API requests write the same key row on every call.
+    last_used = row.last_used_at
+    if last_used is not None and last_used.tzinfo is None:
+        last_used = last_used.replace(tzinfo=UTC)
+    refresh_after = now - timedelta(minutes=1)
+    if last_used is None or last_used <= refresh_after:
+        cutoff = refresh_after.replace(tzinfo=None)
+        await session.execute(
+            update(ApiKey)
+            .where(
+                ApiKey.id == row.id,
+                or_(ApiKey.last_used_at.is_(None), ApiKey.last_used_at <= cutoff),
+            )
+            .values(last_used_at=now.replace(tzinfo=None))  # database timestamps are naive UTC
+            .execution_options(synchronize_session=False)
+        )
+
+    return tenant
+
+
+async def _get_active_tenant(
+    session: AsyncSession,
+    key: ApiKey,
+) -> tuple[Project | None, Organisation | None]:
+    """Resolve the key's active project and organisation without leaking state."""
+    project = await session.get(Project, str(key.project_id))
+    organisation = await session.get(Organisation, str(key.organisation_id))
+    if (
+        project is None
+        or organisation is None
+        or not project.is_active
+        or not organisation.is_active
+        or project.deleted_at is not None
+        or organisation.deleted_at is not None
+        or str(project.organisation_id) != str(key.organisation_id)
+        or str(project.project_id) != str(key.project_id)
+        or str(project.environment) != str(key.environment)
+    ):
+        return None, None
+    return project, organisation

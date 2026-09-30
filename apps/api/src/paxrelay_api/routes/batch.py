@@ -8,7 +8,8 @@ commits the successful items together.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy.exc import IntegrityError
 
 from paxrelay_domain import Agent, Provider
 from paxrelay_db.repositories import (
@@ -17,6 +18,7 @@ from paxrelay_db.repositories import (
 )
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
+from paxrelay_api.audit import record_change
 from paxrelay_api.routes.agents import _agent_out
 from paxrelay_api.routes.providers import _provider_out
 from paxrelay_api.schemas import (
@@ -27,6 +29,7 @@ from paxrelay_api.schemas import (
     BatchProviderResponse,
     BatchProviderResult,
 )
+from paxrelay_api.security.authorization import require_scope
 
 router = APIRouter(prefix="/batch", tags=["batch"])
 
@@ -35,9 +38,14 @@ router = APIRouter(prefix="/batch", tags=["batch"])
     "/agents",
     response_model=BatchAgentResponse,
     status_code=status.HTTP_207_MULTI_STATUS,
+    dependencies=[
+        Depends(require_scope("batch:write")),
+        Depends(require_scope("agents:write")),
+    ],
 )
 async def batch_create_agents(
     body: BatchAgentCreate,
+    request: Request,
     session: SessionDep,
     tenant: TenantDep,
 ) -> BatchAgentResponse:
@@ -48,7 +56,9 @@ async def batch_create_agents(
 
     for item in body.agents:
         # Proactive slug conflict check for a clean error message.
-        existing = await repo.get_by_slug(tenant.project_id, item.slug)
+        existing = await repo.get_by_slug(
+            tenant.project_id, item.slug, tenant.environment
+        )
         if existing is not None:
             results.append(
                 BatchAgentResult(
@@ -68,10 +78,25 @@ async def batch_create_agents(
                     description=item.description,
                 )
                 saved = await repo.save(agent)
+                await record_change(
+                    request=request,
+                    session=session,
+                    tenant=tenant,
+                    event_type="agent.created",
+                    resource_type="agent",
+                    resource_id=saved.id,
+                    details={"slug": saved.slug, "batch": True},
+                )
             results.append(BatchAgentResult(success=True, agent=_agent_out(saved)))
             success += 1
-        except Exception as exc:  # noqa: BLE001 — surface per-item failure to caller
-            results.append(BatchAgentResult(success=False, error=str(exc)))
+        except IntegrityError:
+            results.append(
+                BatchAgentResult(success=False, error="The agent conflicts with an existing record.")
+            )
+        except Exception:  # noqa: BLE001 — do not expose database/internal details
+            results.append(
+                BatchAgentResult(success=False, error="The agent could not be created.")
+            )
 
     return BatchAgentResponse(
         results=results,
@@ -84,9 +109,14 @@ async def batch_create_agents(
     "/providers",
     response_model=BatchProviderResponse,
     status_code=status.HTTP_207_MULTI_STATUS,
+    dependencies=[
+        Depends(require_scope("batch:write")),
+        Depends(require_scope("providers:write")),
+    ],
 )
 async def batch_create_providers(
     body: BatchProviderCreate,
+    request: Request,
     session: SessionDep,
     tenant: TenantDep,
 ) -> BatchProviderResponse:
@@ -109,10 +139,25 @@ async def batch_create_providers(
                     website_url=item.website_url,
                 )
                 saved = await repo.save(provider)
+                await record_change(
+                    request=request,
+                    session=session,
+                    tenant=tenant,
+                    event_type="provider.created",
+                    resource_type="provider",
+                    resource_id=saved.id,
+                    details={"slug": saved.slug, "batch": True},
+                )
             results.append(BatchProviderResult(success=True, provider=_provider_out(saved)))
             success += 1
-        except Exception as exc:  # noqa: BLE001 — surface per-item failure to caller
-            results.append(BatchProviderResult(success=False, error=str(exc)))
+        except IntegrityError:
+            results.append(
+                BatchProviderResult(success=False, error="The provider conflicts with an existing record.")
+            )
+        except Exception:  # noqa: BLE001 — do not expose database/internal details
+            results.append(
+                BatchProviderResult(success=False, error="The provider could not be created.")
+            )
 
     return BatchProviderResponse(
         results=results,

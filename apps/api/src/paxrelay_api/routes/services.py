@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Request, status
 
 from paxrelay_domain import (
     ProviderMetrics,
@@ -23,8 +23,11 @@ from paxrelay_domain import (
 from paxrelay_db.repositories import SqlAlchemyProviderRepository
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
+from paxrelay_api.audit import record_change
 from paxrelay_api.exceptions import NotFoundError
 from paxrelay_api.schemas import ServiceCreate, ServiceOut
+from paxrelay_api.security.authorization import require_scope
+from paxrelay_api.tenant import tenant_owns
 
 router = APIRouter(prefix="/services", tags=["services"])
 
@@ -53,10 +56,16 @@ def _service_out(s: Service) -> ServiceOut:
     )
 
 
-@router.post("/providers/{provider_id}", response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/providers/{provider_id}",
+    response_model=ServiceOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope("services:write"))],
+)
 async def publish_service(
     provider_id: UUID,
     body: ServiceCreate,
+    request: Request,
     session: SessionDep,
     tenant: TenantDep,
 ) -> ServiceOut:
@@ -64,7 +73,7 @@ async def publish_service(
     provider = await repo.get(provider_id)
     # Reject cross-tenant provider references — treat as not-found to avoid
     # leaking the existence of providers owned by other organisations.
-    if provider is None or provider.organisation_id != tenant.organisation_id:
+    if provider is None or not tenant_owns(tenant, provider):
         raise NotFoundError(f"Provider {provider_id} not found.")
 
     service = Service(
@@ -114,23 +123,42 @@ async def publish_service(
             health_check_passing=True,
         )
     )
+    await record_change(
+        request=request,
+        session=session,
+        tenant=tenant,
+        event_type="service.published",
+        resource_type="service",
+        resource_id=saved.id,
+        details={"provider_id": str(provider_id), "slug": saved.slug},
+    )
     return _service_out(saved)
 
 
-@router.get("", response_model=list[ServiceOut])
+@router.get(
+    "",
+    response_model=list[ServiceOut],
+    dependencies=[Depends(require_scope("services:read"))],
+)
 async def list_services(session: SessionDep, tenant: TenantDep) -> list[ServiceOut]:
     repo = SqlAlchemyProviderRepository(session)
     services = await repo.list_services_by_tenant(
-        tenant.organisation_id, tenant.project_id
+        tenant.organisation_id,
+        tenant.project_id,
+        environment=tenant.environment,
     )
     return [_service_out(s) for s in services]
 
 
-@router.get("/{service_id}", response_model=ServiceOut)
+@router.get(
+    "/{service_id}",
+    response_model=ServiceOut,
+    dependencies=[Depends(require_scope("services:read"))],
+)
 async def get_service(service_id: UUID, session: SessionDep, tenant: TenantDep) -> ServiceOut:
     repo = SqlAlchemyProviderRepository(session)
     service = await repo.get_service(service_id)
     # Treat a cross-tenant resource as not-found to avoid information leakage.
-    if service is None or service.organisation_id != tenant.organisation_id:
+    if service is None or not tenant_owns(tenant, service):
         raise NotFoundError(f"Service {service_id} not found.")
     return _service_out(service)

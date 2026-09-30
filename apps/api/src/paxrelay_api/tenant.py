@@ -21,3 +21,19 @@ class TenantContext:
     organisation_id: UUID
     project_id: UUID
     environment: str = "development"
+    scopes: frozenset[str] = frozenset()
+    api_key_id: UUID | None = None
+
+
+def tenant_owns(tenant: TenantContext, resource: object) -> bool:
+    """Return whether a resource belongs to this exact tenant and environment."""
+    organisation_id = getattr(resource, "organisation_id", None)
+    project_id = getattr(resource, "project_id", None)
+    environment = getattr(resource, "environment", None)
+    if hasattr(environment, "value"):
+        environment = environment.value
+    return (
+        str(organisation_id) == str(tenant.organisation_id)
+        and str(project_id) == str(tenant.project_id)
+        and str(environment) == tenant.environment
+    )

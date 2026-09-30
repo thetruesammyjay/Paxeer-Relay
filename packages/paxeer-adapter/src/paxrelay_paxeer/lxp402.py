@@ -53,7 +53,7 @@ def build_payment_requirement(
 
 
 def verify_requirement_fields(
-    proof_claims: dict[str, Any],
+    proof_claims: Any,
     expected_quote_id: str,
     expected_request_hash: str,
     expected_amount_atomic: int,
@@ -69,6 +69,13 @@ def verify_requirement_fields(
     """
     now = now or datetime.utcnow()
 
+    # The proof is untrusted input. JSON may decode to a list, string, number,
+    # or null, and individual claims may have the wrong type. Treat all of
+    # those cases as an invalid proof instead of allowing attribute/type errors
+    # to escape into the request handler as HTTP 500 responses.
+    if not isinstance(proof_claims, dict):
+        return False, "invalid_proof_format"
+
     if now >= expires_at:
         return False, "quote_expired"
 
@@ -78,11 +85,20 @@ def verify_requirement_fields(
     if proof_claims.get("request_hash") != expected_request_hash:
         return False, "request_hash_mismatch"
 
-    claimed_amount = int(proof_claims.get("amount_atomic", -1))
+    raw_amount = proof_claims.get("amount_atomic")
+    if isinstance(raw_amount, bool):
+        return False, "amount_mismatch"
+    if isinstance(raw_amount, int):
+        claimed_amount = raw_amount
+    elif isinstance(raw_amount, str) and raw_amount.isdecimal():
+        claimed_amount = int(raw_amount)
+    else:
+        return False, "amount_mismatch"
     if claimed_amount != expected_amount_atomic:
         return False, "amount_mismatch"
 
-    if proof_claims.get("recipient", "").lower() != expected_recipient.lower():
+    recipient = proof_claims.get("recipient")
+    if not isinstance(recipient, str) or recipient.lower() != expected_recipient.lower():
         return False, "recipient_mismatch"
 
     if proof_claims.get("nonce") != expected_nonce:

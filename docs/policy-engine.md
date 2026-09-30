@@ -49,7 +49,7 @@ Use `enforce` for any action whose policy must block payment.
 | --- | --- | --- |
 | `allow` | Request passes the active policy. | Continues to quote creation. |
 | `deny` | A rule blocks the request. | Returns HTTP 403 with decision and explanation. |
-| `require_approval` | A rule requires human review. | Returns HTTP 202 with decision and explanation; a complete approval workflow is not implemented. |
+| `require_approval` | A rule requires review. | Persists a tenant-scoped approval request and returns HTTP 202 with its ID. A key with `approvals:write` can approve or reject; the agent must retry the same request after approval. Decisions are attributed to an API key, not an individual dashboard user. |
 | `pause_agent` | Emergency or failure rule requests a pause. | Returned as a policy result; durable agent pausing is not performed by the evaluator. |
 
 ## Policy model versus API schema
@@ -78,9 +78,10 @@ assigned active policy against that service's actual price and metrics. This
 ensures a policy sees the proposed amount and provider. No active policy means
 the gateway returns HTTP 403.
 
-The policy result explanation should be shown beside the request facts in the
-operator console. Do not present a `require_approval` result as a stored
-approval request until the API persists one and provides an approve/deny route.
+The API stores the policy explanation and binds the approval to the route,
+amount, recipient, and policy version. The approval API is available, while the
+current operator console remains presentation-only and is not connected to
+these routes. Individual dashboard-user authentication is also not implemented.
 
 ## Changes and validation
 

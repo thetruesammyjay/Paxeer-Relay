@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from paxrelay_db.models.payments import PaymentModel, ToolCallModel
@@ -18,6 +18,7 @@ from paxrelay_db.repositories._common import sid
 from paxrelay_api.dependencies import SessionDep, TenantDep
 from paxrelay_api.exceptions import InvalidRequestError
 from paxrelay_api.schemas import AnalyticsCapabilityOut, AnalyticsSpendOut
+from paxrelay_api.security.authorization import require_scope
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -37,7 +38,11 @@ def _default_range(
     return resolved_start, resolved_end
 
 
-@router.get("/spend", response_model=AnalyticsSpendOut)
+@router.get(
+    "/spend",
+    response_model=AnalyticsSpendOut,
+    dependencies=[Depends(require_scope("analytics:read"))],
+)
 async def get_spend_analytics(
     session: SessionDep,
     tenant: TenantDep,
@@ -57,6 +62,7 @@ async def get_spend_analytics(
         .where(
             ToolCallModel.organisation_id == sid(tenant.organisation_id),
             ToolCallModel.project_id == sid(tenant.project_id),
+            ToolCallModel.environment == tenant.environment,
             PaymentModel.state.in_(_SPENT_STATES),
             PaymentModel.created_at >= start,
             PaymentModel.created_at <= end,
@@ -75,7 +81,11 @@ async def get_spend_analytics(
     )
 
 
-@router.get("/capabilities", response_model=list[AnalyticsCapabilityOut])
+@router.get(
+    "/capabilities",
+    response_model=list[AnalyticsCapabilityOut],
+    dependencies=[Depends(require_scope("analytics:read"))],
+)
 async def get_capability_breakdown(
     session: SessionDep,
     tenant: TenantDep,
@@ -96,6 +106,7 @@ async def get_capability_breakdown(
         .where(
             ToolCallModel.organisation_id == sid(tenant.organisation_id),
             ToolCallModel.project_id == sid(tenant.project_id),
+            ToolCallModel.environment == tenant.environment,
             PaymentModel.state.in_(_SPENT_STATES),
             PaymentModel.created_at >= start,
             PaymentModel.created_at <= end,
