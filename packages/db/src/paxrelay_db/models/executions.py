@@ -62,14 +62,50 @@ class ExecutionReceiptModel(Base, TimestampMixin):
 
 class SettlementRecordModel(Base, TimestampMixin):
     __tablename__ = "settlement_records"
+    __table_args__ = (
+        UniqueConstraint("payment_id", name="uq_settlement_record_payment"),
+        Index(
+            "ix_settlement_reconciliation_review",
+            "reconciliation_status",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_settlement_reconciliation_due",
+            "next_attempt_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "reconciliation_status IN ('awaiting_external', 'layerx_confirmed')"
+            ),
+        ),
+        Index(
+            "ix_settlement_reconciliation_claim",
+            "claimed_at",
+            postgresql_where=text("claim_token IS NOT NULL"),
+        ),
+    )
     id: Mapped[str] = pk_uuid()
-    payment_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)
+    payment_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False)
     layerx_transaction_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
     layerx_batch_id: Mapped[str | None] = mapped_column(String(66), nullable=True)
+    l1_settlement_id: Mapped[str | None] = mapped_column(String(66), nullable=True)
     l1_block_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     l1_transaction_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
     l1_commitment_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
-    reconciliation_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    reconciliation_status: Mapped[str] = mapped_column(
+        String(32), default="awaiting_external", nullable=False
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    internal_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    internal_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reconciled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     mismatch_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

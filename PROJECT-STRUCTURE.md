@@ -12,7 +12,7 @@ The repository is in pre-alpha and in an active refactor.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
 - The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
-- The worker expires overdue policy approvals, fans supported events into the durable webhook queue, and sends signed webhooks with DNS pinning and bounded retries. Its reconciliation, provider health, analytics, and indexing jobs are placeholders.
+- The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation; provider health, analytics, and indexing remain unfinished.
 - Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK and MCP module files are placeholders, and the TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
@@ -1920,18 +1920,44 @@ Verification must check:
 
 ### Settlement reconciliation
 
-The reconciler should independently confirm:
+The worker runs an internal consistency pass followed by a leased external
+evidence pass. It locks candidate rows only while claiming or saving them; HTTP
+requests run outside database transactions. Claims expire after a lease and
+due records retry with capped exponential backoff. The payment row is never
+advanced by reconciliation.
+
+The reconciler confirms:
 
 ```text
-Payment verified by gateway
-LayerX transaction exists
-LayerX transaction matches quote
-LayerX batch identifier exists
-Batch was anchored to Paxeer L1
-L1 settlement record matches the expected commitment
+Payment agrees with its intent, quote, and originating tool call
+Quote request hash, network, recipient, scheme, and settlement layer are valid
+LayerX transaction exists at the stored transaction hash
+LayerX transaction matches the stored amount, recipient, and quote ID
+LayerX settlement evidence identifies the same payment and batch
+Paxeer settlement record and batch identify the same commitment
+The reported batch transaction list includes the LayerX transaction
+Paxeer JSON-RPC confirms the claimed L1 transaction and block
+The canonical receipt contains the configured contract event and commitment
 ```
 
-A request may be delivered after LayerX verification while its L1 anchoring remains pending.
+Missing or unavailable evidence remains `awaiting_external` or
+`layerx_confirmed` and is retried. Explicit conflicts become `mismatch`, are
+visible through the tenant-scoped settlement review API, and emit
+`settlement.mismatch` through the transactional outbox. `reconciled` means all
+required evidence was present. The worker does not promote `PaymentModel.state`.
+
+The adapter expects LayerX resources at `GET /transactions/{transaction_hash}`
+and `GET /batches/{batch_id}`, plus a Paxeer settlement resource at
+`GET /settlement/{settlement_id}`. These HTTP contracts remain assumptions and
+must be confirmed with the network operator.
+L1 receipt verification checks the configured chain ID, successful receipt,
+canonical block, confirmation depth, deployed settlement contract, event topic,
+and exact `bytes32` commitment. Production requires the contract address,
+event topic, and confirmation depth. Batch IDs are opaque LayerX references,
+not transaction hashes. The worker does not independently
+recompute the LayerX batch commitment, so the operator must confirm how the
+batch response's transaction list relates to the on-chain commitment before
+using reconciliation for financial operations.
 
 ---
 

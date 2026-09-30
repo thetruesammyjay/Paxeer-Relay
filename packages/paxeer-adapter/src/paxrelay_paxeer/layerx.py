@@ -8,6 +8,8 @@ from urllib.parse import quote
 
 import httpx
 
+from paxrelay_paxeer.errors import AdapterResponseError, AdapterUnavailableError
+
 
 class LayerXClient:
     """HTTP client for LayerX transaction lookups.
@@ -33,20 +35,41 @@ class LayerXClient:
                     return None
                 resp.raise_for_status()
                 payload = resp.json()
-                return payload if isinstance(payload, dict) else None
-            except (httpx.HTTPError, ValueError):
-                return None
+                if not isinstance(payload, dict):
+                    raise AdapterResponseError("LayerX transaction response must be an object")
+                return payload
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 or exc.response.status_code >= 500:
+                    raise AdapterUnavailableError("LayerX transaction read is unavailable") from exc
+                raise AdapterResponseError("LayerX rejected the transaction read") from exc
+            except httpx.HTTPError as exc:
+                raise AdapterUnavailableError("LayerX transaction read is unavailable") from exc
+            except ValueError as exc:
+                raise AdapterResponseError("LayerX transaction response is not valid JSON") from exc
 
     async def get_batch(self, batch_id: str) -> dict[str, Any] | None:
+        if not isinstance(batch_id, str) or not batch_id or len(batch_id) > 256:
+            return None
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
-                resp = await client.get(f"{self._api_url}/batches/{batch_id}")
+                resp = await client.get(
+                    f"{self._api_url}/batches/{quote(batch_id, safe='')}"
+                )
                 if resp.status_code == 404:
                     return None
                 resp.raise_for_status()
-                return resp.json()
-            except httpx.HTTPError:
-                return None
+                payload = resp.json()
+                if not isinstance(payload, dict):
+                    raise AdapterResponseError("LayerX batch response must be an object")
+                return payload
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 or exc.response.status_code >= 500:
+                    raise AdapterUnavailableError("LayerX batch read is unavailable") from exc
+                raise AdapterResponseError("LayerX rejected the batch read") from exc
+            except httpx.HTTPError as exc:
+                raise AdapterUnavailableError("LayerX batch read is unavailable") from exc
+            except ValueError as exc:
+                raise AdapterResponseError("LayerX batch response is not valid JSON") from exc
 
     async def verify_transaction_matches_quote(
         self,

@@ -93,10 +93,12 @@ uv run --package paxrelay-simulator uvicorn paxrelay_simulator.main:app --reload
 uv run --package paxrelay-worker python -m paxrelay_worker
 ```
 
-The gateway defaults to its mock Paxeer adapter. The simulator fabricates
-payment and settlement results. The worker expires policy approvals, fans
-supported outbox events into delivery rows, and sends signed webhooks. Settlement
-reconciliation, provider health, analytics, and provider indexing remain no-ops.
+The gateway and worker default to their mock Paxeer adapter. The simulator
+fabricates payment and settlement results. The worker expires policy approvals,
+fans supported outbox events into delivery rows, sends signed webhooks, and
+reconciles local payment facts with LayerX transaction reads. It supports
+settlement and batch reads through a separately configured adapter endpoint.
+Provider health, analytics, and provider indexing remain unfinished.
 
 ## Environment variables
 
@@ -132,12 +134,22 @@ include:
 | `WEBHOOK_DELIVERY_BATCH_SIZE` | Worker | Upper bound on rows selected at once; defaults to 50, also limited by delivery concurrency. |
 | `WEBHOOK_DELIVERY_CONCURRENCY` | Worker | Maximum concurrent webhook requests; defaults to 10. |
 | `WEBHOOK_DELIVERY_LEASE_SECONDS` | Worker | Recovery time for a delivery claimed by a worker that stopped; defaults to 120 seconds. |
+| `RECONCILIATION_BATCH_SIZE` | Worker | Maximum settlement rows claimed per scan; defaults to 50. |
+| `RECONCILIATION_CONCURRENCY` | Worker | Maximum concurrent adapter lookups; defaults to 10. |
+| `RECONCILIATION_CLAIM_LEASE_SECONDS` | Worker | Reclaims rows held by a stopped worker; must exceed five upstream request timeouts. |
+| `RECONCILIATION_RETRY_INITIAL_SECONDS` | Worker | Initial retry delay for incomplete or unavailable external evidence; defaults to 30 seconds. |
+| `RECONCILIATION_RETRY_MAX_SECONDS` | Worker | Maximum exponential retry delay; defaults to one hour. |
 | `READINESS_TIMEOUT_SECONDS` | API and gateway | PostgreSQL and Redis readiness deadline; defaults to 3 seconds. |
-| `APP_ENV` | API and gateway | Use the same tenant environment for the services; the gateway accepts `development`, `test`, `staging`, or `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
-| `USE_MOCK_ADAPTER` | Gateway | Defaults to true for development. Production startup rejects true. The official adapter still needs independent validation against the live network contracts. |
-| `LAYERX_API_URL` | Gateway | Required as an HTTPS URL in production. |
-| `PAXEER_CHAIN_ID` | Gateway | Current production target is chain ID 125. |
-| `PAXEER_RPC_URL` | Gateway | Must use HTTPS in production. |
+| `APP_ENV` | API, gateway, and worker | Use the same tenant environment for the services; accepted values are `development`, `test`, `staging`, and `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
+| `USE_MOCK_ADAPTER` | Gateway and worker | Defaults to true for development. Production startup rejects true. |
+| `LAYERX_API_URL` | Gateway and worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects `GET /transactions/{transaction_hash}` to return the transaction amount, recipient, and quote ID/memo. |
+| `PAXEER_ADAPTER_TIMEOUT_SECONDS` | Worker | Timeout for each individual LayerX or settlement read; defaults to 15 seconds. |
+| `PAXEER_SETTLEMENT_API_URL` | Worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects a read-only `GET /settlement/{settlement_id}` resource. Confirm this assumed path and response fields with the network operator. |
+| `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS` | Worker | Production-required deployed contract address used to filter receipt logs. |
+| `PAXEER_L1_COMMITMENT_EVENT_TOPIC` | Worker | Production-required 32-byte event signature topic. The verifier looks for the exact commitment as an indexed topic or 32-byte ABI data word. |
+| `PAXEER_L1_CONFIRMATION_BLOCKS` | Worker | Production-required positive confirmation depth, set from Paxeer's finality policy. |
+| `PAXEER_CHAIN_ID` | Gateway and worker | Current production target is chain ID 125. |
+| `PAXEER_RPC_URL` | Gateway and worker | Must use HTTPS in production. |
 | `RECEIPT_SIGNING_PRIVATE_KEY` | Gateway | Production requires a protected PEM key; keep it in a secret manager. |
 | `RECEIPT_SIGNING_KEY_ID` | Gateway | Must identify the production receipt key and cannot be `local-development`. |
 | `NEXT_PUBLIC_API_BASE_URL` | Web | Defaults to `http://localhost:8000` in the client wrapper. |
@@ -163,8 +175,11 @@ worker, PostgreSQL, Redis, and receipt storage. Before exposing any component:
    DNS answers, pins the selected public IP for each forwarded request, and
    rejects redirects, but it does not verify public hostname ownership. Keep
    request/response size limits enabled.
-6. Complete settlement reconciliation and health jobs, and verify webhook
-   delivery behavior in staging before enabling production subscriptions.
+6. Validate the LayerX and Paxeer read endpoints against authoritative network
+   contracts and staging records. Confirm transaction field meanings, batch
+   membership, settlement contract address, commitment event topic, and
+   confirmation depth. The worker never advances payment state; it records
+   only evidence that passed these checks.
 7. Configure orchestrator liveness on `/health` and readiness on `/ready`.
 8. Keep simulator services disabled in production.
 9. Test backups, restoration, key loss, provider failure, and delayed settlement.

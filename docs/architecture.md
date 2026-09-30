@@ -3,7 +3,8 @@
 PaxRelay is a set of applications with separate responsibilities. The web
 console configures and observes a tenant. The control-plane API manages
 resources. The gateway coordinates paid calls. PostgreSQL stores records. A
-worker handles approval expiry, outbox fan-out, and webhook delivery. A simulator supplies fake
+worker handles approval expiry, settlement reconciliation, outbox fan-out, and
+webhook delivery. A simulator supplies fake
 Paxeer, LayerX, registry, and 402LXP responses for development.
 
 ## System context
@@ -27,8 +28,10 @@ Simulator ──────────► fake 402LXP, LayerX, and registry en
 
 The diagram shows intended system boundaries. In the current checkout, the web
 pages are largely static prototypes, and the simulator returns fabricated
-results. Approval expiry and webhook delivery are active worker jobs; payment
-reconciliation, provider health, indexing, and analytics remain placeholders.
+results. Approval expiry, webhook delivery, and the reconciliation worker are
+active. Reconciliation compares local payment/intent/quote facts, then reads
+LayerX transaction evidence and can read settlement/batch evidence through the
+configured adapter. Provider health, indexing, and analytics remain unfinished.
 The gateway's paid-call orchestration is the most complete request path, but its
 default payment adapter is mock mode.
 
@@ -77,8 +80,10 @@ expired and writes audit and domain events transactionally. Outbox fan-out
 creates durable delivery rows for active webhook subscriptions. A separate
 delivery loop sends HMAC-signed requests with DNS-pinned destinations, bounded
 timeouts and bodies, and retry leases. Delivery is at least once, so consumers
-must deduplicate by delivery ID. Reconciliation, indexing, analytics, and
-health `tick()` methods remain placeholders.
+must deduplicate by delivery ID. Reconciliation claims due records, performs
+external reads outside the database transaction, retries incomplete evidence,
+and records mismatches for tenant review. It never advances payment state.
+Indexing, analytics, and health `tick()` methods remain placeholders.
 
 ### `apps/simulator`
 

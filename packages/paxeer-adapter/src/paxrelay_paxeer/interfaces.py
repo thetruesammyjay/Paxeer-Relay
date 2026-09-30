@@ -37,6 +37,10 @@ class PaymentAdapter(Protocol):
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any]: ...
 
+    async def get_layerx_transaction(
+        self, transaction_hash: str
+    ) -> dict[str, Any] | None: ...
+
 
 @runtime_checkable
 class RegistryAdapter(Protocol):
@@ -55,6 +59,7 @@ class SettlementAdapter(Protocol):
     async def read_batch(self, batch_id: str) -> dict[str, Any] | None: ...
     async def verify_l1_commitment(
         self,
-        batch_id: str,
+        transaction_hash: str,
         commitment_hash: str,
-    ) -> bool: ...
+        expected_block_number: int,
+    ) -> bool | None: ...

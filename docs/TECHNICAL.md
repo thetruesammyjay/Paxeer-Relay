@@ -65,6 +65,8 @@ pnpm dev
 The web console is still a prototype and most views use sample data. The
 simulator returns fabricated network results. The worker expires overdue policy
 approvals, fans supported outbox events into durable delivery rows, and sends
-HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation,
-provider health, analytics, and indexing remain placeholders.
-Do not use mock output as evidence of a real payment or settlement.
+HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation
+checks local payment facts and reads LayerX/Paxeer adapter evidence, but the
+external settlement endpoint contract still needs validation with the network
+operator. Provider health, analytics, and indexing remain placeholders. Do not
+use mock output as evidence of a real payment or settlement.

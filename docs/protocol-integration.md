@@ -13,7 +13,7 @@ The package defines four async protocols:
 | `WalletAdapter` | Read wallet and wallet policy, verify a session proof, read balance. |
 | `PaymentAdapter` | Build a payment requirement, verify payment proof, read payment status. |
 | `RegistryAdapter` | Publish a service, find services by capability, read provider history. |
-| `SettlementAdapter` | Read settlement and batch records and verify an L1 commitment. |
+| `SettlementAdapter` | Read settlement and batch records and verify an L1 commitment against a Paxeer JSON-RPC receipt. |
 
 `MockPaxeerAdapter` and `OfficialPaxeerAdapter` implement these surfaces. The
 gateway currently selects the mock adapter by default with
@@ -33,15 +33,48 @@ relative paths under the configured RPC/API base URLs:
 | Service publish | `POST /registry/services` |
 | Service search | `GET /registry/services?capability=...` |
 | Provider history | `GET /registry/providers/{provider_id}/history` |
+| Payment status by local payment ID | No verified route is configured; the adapter returns `unknown`. Reconciliation uses the stored LayerX transaction hash instead. |
 | LayerX transaction read | `GET /transactions/{transaction_hash}` under LayerX API URL |
 | LayerX batch read | `GET /batches/{batch_id}` under LayerX API URL |
-| Settlement read | `GET /settlement/{settlement_id}` under RPC URL |
-| L1 batch read | `GET /batch/{batch_id}` under RPC URL |
+| Paxeer settlement record | `GET /settlement/{settlement_id}` under `PAXEER_SETTLEMENT_API_URL` |
 
 These request shapes are code assumptions and have not been demonstrated
 against authoritative production endpoints in this repository. Confirm the
 official API paths, authentication, response schemas, finality semantics,
 timeouts, and retry behavior before enabling live integration.
+
+The official [Paxeer JSON-RPC reference](https://docs.paxeer.app/api-reference)
+documents the standard EVM RPC surface. The [Paxeer and LayerX integration
+guide](https://docs.paxeer.app/paxeer-vs-layerx/) directs applications to use a
+LayerX receipt for the activity and a Paxeer transaction receipt for its
+on-chain operation, with the environment's contract ABI and address. The HTTP
+resource paths above are not established by those references.
+
+## L1 receipt verification
+
+The reconciliation worker does not accept `l1_anchored: true` or a matching
+commitment returned by an HTTP endpoint as proof of anchoring. It checks the
+settlement's claimed L1 transaction with the configured Paxeer JSON-RPC URL:
+
+1. `eth_chainId` must match `PAXEER_CHAIN_ID`.
+2. `eth_getTransactionReceipt` must return the claimed transaction hash, a
+   successful status, and the claimed block number.
+3. `eth_getBlockByNumber` must return the same canonical block hash as the
+   receipt, and `eth_blockNumber` must show the configured confirmation depth.
+4. The receipt must contain a log from the configured settlement contract with
+   the configured event signature topic. The exact 32-byte commitment must
+   appear as an indexed event topic or a 32-byte ABI data word.
+
+Production requires `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS`,
+`PAXEER_L1_COMMITMENT_EVENT_TOPIC`, and
+`PAXEER_L1_CONFIRMATION_BLOCKS`. Obtain these values and the finality policy
+from the Paxeer operator. The verifier supports an event where the commitment
+is emitted as a `bytes32` value; it does not decode arbitrary ABI layouts or
+independently recompute a LayerX batch commitment. LayerX and Paxeer REST
+resources remain assumed contracts and must be confirmed against authoritative
+services. Batch IDs are opaque LayerX references, not EVM transaction hashes.
+Until the configuration and response contract are confirmed, do not use
+reconciliation as authorization to release funds.
 
 ## 402LXP requirement and proof checks
 
@@ -82,8 +115,10 @@ Before an adapter can be considered production-ready:
 5. Verify the gateway's atomic PostgreSQL nonce claim with concurrent
    submissions, then validate LayerX transaction replay semantics against the
    authoritative service.
-6. Define what “verified”, LayerX-settled, and L1-anchored mean and how to
-   transition among them.
+6. Confirm the settlement event ABI, deployment address, confirmation depth,
+   and exact relationship between LayerX batch contents and the committed
+   value. Define what “verified”, LayerX-settled, and L1-anchored mean and how
+   to transition among them.
 7. Add adapter contract tests against a controlled simulator and a staging
    endpoint.
 8. Fail closed when upstream proof or settlement data is missing or

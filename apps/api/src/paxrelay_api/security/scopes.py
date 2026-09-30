@@ -12,6 +12,7 @@ SCOPE_RESOURCES = frozenset(
         "api-keys",
         "receipts",
         "transactions",
+        "settlements",
         "analytics",
         "audit-logs",
         "webhooks",

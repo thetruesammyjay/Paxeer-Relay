@@ -84,7 +84,7 @@ Scopes are resource/action pairs serialized as alternating colon-separated
 values. For example, `agents:read:agents:write:api-keys:read` grants read and
 write access to agents and read access to API-key metadata. Supported resources
 are `agents`, `providers`, `services`, `policies`, `approvals`, `api-keys`, `receipts`,
-`transactions`, `analytics`, `audit-logs`, `webhooks`, and `batch`; actions are
+`transactions`, `settlements`, `analytics`, `audit-logs`, `webhooks`, and `batch`; actions are
 `read` and `write`. The gateway uses the additional `gateway:invoke` grant. An
 API key can only create another key with a subset of its own grants. An empty
 scope set grants no access.
@@ -100,6 +100,7 @@ scope set grants no access.
 | `gateway` | none | Invoke paid services and submit payment proof |
 | `receipts` | List receipts | — |
 | `transactions` | List transactions | — |
+| `settlements` | Review tenant-scoped reconciliation records | — |
 | `analytics` | Read spend and capability summaries | — |
 | `audit-logs` | Read recent tenant audit records | — |
 | `webhooks` | List/get endpoints | Create/update/delete endpoints |
@@ -275,6 +276,37 @@ Analytics defaults to the previous 30 days. `start_date` must precede
 `anchored_l1`; it does not mean every counted payment has an L1 anchor. The
 current `period` value is echoed in the response; the endpoint does not return
 a separate row for each day or month.
+
+### Settlement review
+
+`GET /settlements/reconciliation` requires `settlements:read` and returns
+tenant-scoped records. It defaults to `status=mismatch`; request
+`status=awaiting_external` to see payments that passed the local consistency
+check or need an external retry. Other statuses are `layerx_confirmed` and
+`reconciled`; `anchored` remains accepted for older records. Pages use `limit`
+(1–100, default 50) and the `before_created_at` / `before_id` cursor pair.
+
+The worker first compares each payment with its local intent, quote, and tool
+call. It checks the request hash, agent, amount, currency, recipient, scheme,
+chain, and settlement layer. It then reads the transaction by its stored
+LayerX hash and compares the transaction hash, amount, recipient, and quote ID.
+A matching LayerX transaction is marked
+`layerx_confirmed`. A record becomes `reconciled` only when the configured
+settlement adapter also confirms the settlement ID, batch, L1 commitment,
+transaction membership, block, and L1 transaction hash. Missing evidence and
+upstream errors remain retryable; explicit contradictions become `mismatch`
+and emit `settlement.mismatch` to subscribed webhooks. Mismatch details contain
+issue codes and, for safe scalar comparisons, truncated expected/actual values.
+They never include the raw payment proof.
+
+The response includes `attempt_count`, `next_attempt_at`, `last_checked_at`, and
+a safe `last_error` code for operations. Payment state is never advanced by
+this read-only worker. Production adapter configuration uses `LAYERX_API_URL`
+and `PAXEER_SETTLEMENT_API_URL`. The worker checks the claimed L1 transaction
+through JSON-RPC and requires a configured contract address, commitment event
+topic, and confirmation depth. Confirm these values, the LayerX transaction
+and batch endpoints, and the Paxeer settlement endpoint with the network
+operator before using external results for financial operations.
 
 ### Audit logs
 

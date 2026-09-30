@@ -8,7 +8,7 @@ independently of the internal domain layer.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
@@ -358,6 +358,34 @@ class WebhookDeliveryOut(BaseModel):
 
 class WebhookDeliveryPageOut(BaseModel):
     items: list[WebhookDeliveryOut]
+    next_cursor_created_at: datetime | None = None
+    next_cursor_id: UUID | None = None
+
+
+class SettlementReconciliationOut(BaseModel):
+    id: UUID
+    payment_id: UUID
+    payment_state: str
+    reconciliation_status: str
+    layerx_transaction_hash: str | None
+    layerx_batch_id: str | None
+    l1_settlement_id: str | None
+    l1_block_number: int | None
+    l1_transaction_hash: str | None
+    l1_commitment_hash: str | None
+    internal_checked_at: datetime | None
+    last_checked_at: datetime | None
+    attempt_count: int
+    next_attempt_at: datetime | None
+    last_error: str | None
+    reconciled_at: datetime | None
+    mismatch_details: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SettlementReconciliationPageOut(BaseModel):
+    items: list[SettlementReconciliationOut]
     next_cursor_created_at: datetime | None = None
     next_cursor_id: UUID | None = None
 

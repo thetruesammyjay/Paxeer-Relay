@@ -77,7 +77,7 @@ a placeholder.
 | `payments` | Submitted/verified payment proof, LayerX references, and settlement timestamps |
 | `execution_attempts` | Each provider forward attempt, status, HTTP code, timestamps, latency, and retryability |
 | `execution_receipts` | Canonical receipt JSON, hashes, signature, signing key ID, and issue time |
-| `settlement_records` | LayerX transaction/batch and eventual L1 anchoring details |
+| `settlement_records` | LayerX transaction/batch and L1 settlement/anchor details, local/external check times, retry count/lease, reconciliation status, and safe mismatch issue codes |
 
 The domain keeps the state machines separate:
 

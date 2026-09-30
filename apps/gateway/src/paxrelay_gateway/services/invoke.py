@@ -57,7 +57,11 @@ from paxrelay_gateway.proxy.endpoint_security import (
 )
 from paxrelay_gateway.proxy.forwarder import forward_request
 from paxrelay_gateway.receipts.issuer import build_and_sign_receipt
-from paxrelay_gateway.verification import VerificationError, verify_payment_proof
+from paxrelay_gateway.verification import (
+    VerificationError,
+    VerificationUnavailableError,
+    verify_payment_proof,
+)
 
 
 class PaymentAdapter(Protocol):
@@ -659,6 +663,12 @@ class GatewayInvokeService:
         try:
             verification = await verify_payment_proof(
                 proof=proof, quote=quote, adapter=self._paxeer
+            )
+        except VerificationUnavailableError as exc:
+            return InvokeResult(
+                status_code=503,
+                body=_err("payment_verification_unavailable", exc.reason),
+                tool_call_id=call.id,
             )
         except VerificationError as exc:
             return InvokeResult(

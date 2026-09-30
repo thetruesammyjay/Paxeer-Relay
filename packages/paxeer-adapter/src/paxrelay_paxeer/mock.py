@@ -106,6 +106,12 @@ class MockPaxeerAdapter:
             "l1_anchored": False,
         }
 
+    async def get_layerx_transaction(
+        self, transaction_hash: str
+    ) -> dict[str, Any] | None:
+        # The mock status endpoint supplies synthetic confirmation instead.
+        return None
+
     # ------------------------------------------------------------------
     # RegistryAdapter
     # ------------------------------------------------------------------
@@ -143,7 +149,10 @@ class MockPaxeerAdapter:
         }
 
     async def verify_l1_commitment(
-        self, batch_id: str, commitment_hash: str
+        self,
+        transaction_hash: str,
+        commitment_hash: str,
+        expected_block_number: int,
     ) -> bool:
         # Always returns True in mock mode
         return True

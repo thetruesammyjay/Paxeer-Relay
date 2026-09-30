@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Protocol
 
 from paxrelay_domain import Quote
-from paxrelay_paxeer import MockPaxeerAdapter, verify_requirement_fields
+from paxrelay_paxeer import verify_requirement_fields
+from paxrelay_paxeer.errors import AdapterReadError
 
 from paxrelay_gateway.payment.quotes import quote_to_requirement_input
 
@@ -24,11 +26,23 @@ class VerificationError(Exception):
         self.reason = reason
 
 
+class VerificationUnavailableError(Exception):
+    """Raised when an upstream cannot provide proof-verification evidence."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class PaymentVerifier(Protocol):
+    async def verify_payment(self, proof: str, quote: dict) -> dict: ...
+
+
 async def verify_payment_proof(
     *,
     proof: str,
     quote: Quote,
-    adapter: MockPaxeerAdapter,
+    adapter: PaymentVerifier,
 ) -> dict:
     """Verify a payment proof against a quote using the adapter.
 
@@ -57,7 +71,10 @@ async def verify_payment_proof(
         raise VerificationError(reason)
 
     # 2. On-chain verification via the adapter (quote shaped for the adapter).
-    result = await adapter.verify_payment(proof, quote_to_requirement_input(quote))
+    try:
+        result = await adapter.verify_payment(proof, quote_to_requirement_input(quote))
+    except AdapterReadError as exc:
+        raise VerificationUnavailableError(exc.code) from exc
     if not result.get("verified"):
         raise VerificationError(str(result.get("reason", "verification_failed")))
 

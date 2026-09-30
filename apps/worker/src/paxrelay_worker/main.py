@@ -14,6 +14,7 @@ import asyncio
 import logging
 
 from paxrelay_db import close_database, configure_database
+from paxrelay_paxeer import MockPaxeerAdapter, OfficialPaxeerAdapter
 
 from paxrelay_worker.config import get_settings
 from paxrelay_worker.jobs.analytics import AnalyticsJob
@@ -37,9 +38,24 @@ async def run() -> None:
     )
     log.info("Worker starting — env=%s", settings.app_env)
 
+    if settings.use_mock_adapter:
+        network_adapter = MockPaxeerAdapter()
+        log.warning("Worker is using the mock Paxeer adapter")
+    else:
+        network_adapter = OfficialPaxeerAdapter(
+            rpc_url=settings.paxeer_rpc_url,
+            layerx_api_url=settings.layerx_api_url or "",
+            chain_id=settings.paxeer_chain_id,
+            timeout=settings.paxeer_adapter_timeout_seconds,
+            settlement_api_url=settings.paxeer_settlement_api_url,
+            l1_settlement_contract_address=settings.paxeer_l1_settlement_contract_address,
+            l1_commitment_event_topic=settings.paxeer_l1_commitment_event_topic,
+            l1_confirmation_blocks=settings.paxeer_l1_confirmation_blocks,
+        )
+
     try:
         await asyncio.gather(
-            ReconciliationJob(settings).run(),
+            ReconciliationJob(settings, network_adapter, network_adapter).run(),
             ApprovalExpirationJob(settings).run(),
             ProviderIndexJob(settings).run(),
             AnalyticsJob(settings).run(),

@@ -41,6 +41,7 @@ that data is disposable.
 | Gateway 401 | Missing, invalid, expired, or out-of-tenant credentials | Check the bearer key, `gateway:invoke` grant, environment, and selected agent's tenant. |
 | Gateway 403 | Key lacks gateway scope, agent is inactive, no active policy, or policy denial | Issue the minimum required gateway scope or inspect agent state, assignment, price, and policy explanation. |
 | Gateway 402 | Payment is required or submitted proof did not verify | Check quote expiry and every bound proof field. Never bypass verification to force execution. |
+| Gateway 503 | LayerX or another payment verification dependency could not provide usable evidence | Wait for the dependency to recover, then retry with the same quote and proof. The gateway has not consumed the quote nonce. |
 | Gateway 202 | Policy requires human approval | Review the tenant-scoped approval in the API. After approval, the agent must retry the original invoke with the same idempotency key and payload before a payment quote is issued. |
 | Gateway 409 | The quote nonce was already claimed, or an idempotency key conflicts with stored request data/state | Do not resubmit a claimed proof or alter a request under the same key. Check the tool-call and execution-attempt records; a reserved call may need reconciliation after a gateway interruption. |
 | Gateway 410 | The payment quote expired | Start a new request with a new idempotency key to obtain a fresh quote. |
@@ -65,9 +66,13 @@ the payment, tool-call, and execution-attempt IDs while investigating; do not
 replay a paid operation to a different provider without an explicit recovery
 decision.
 
-Current automatic provider failover is not implemented. Worker reconciliation
-is also a no-op, so do not assume that payment states will advance from
-`verified` to LayerX settlement or L1 anchoring in the background.
+Current automatic provider failover is not implemented. Reconciliation checks
+local payment, intent, and quote consistency, reads the stored transaction from
+LayerX, and can check a settlement record and batch through the configured
+Paxeer settlement adapter. Missing evidence or upstream errors are retried;
+contradictions are put in the tenant-scoped review queue. The worker never
+advances payment state. Review the external endpoint contract with the network
+operator before using the result for financial operations.
 
 ## Background work status
 
@@ -81,18 +86,27 @@ The worker starts seven periodic job loops:
 | Health check | 30 seconds | Logs a stub tick; does not probe service URLs. |
 | Provider indexing | 60 seconds | Logs a stub tick; does not refresh metrics. |
 | Analytics | Configured, 60 seconds by default | Logs a stub tick; does not aggregate records. |
-| Settlement reconciliation | Configured, 30 seconds by default | Logs a stub tick; does not query LayerX or update payment state. |
+| Settlement reconciliation | Configured, 30 seconds by default | Compares payment, intent, and quote; reads LayerX transaction and settlement/batch evidence; verifies the claimed L1 receipt when configured. Uses a short database claim and exponential retry. Records mismatches and emits a webhook event; does not change payment state. |
 
-Approval expiration, outbox fan-out, and webhook delivery perform business
-work. Approval status updates can lag the configured expiry by up to one scan
+Approval expiration, outbox fan-out, webhook delivery, and reconciliation
+perform business work. The worker writes a tenant-scoped
+review record when persisted or external payment facts disagree. Records
+without enough evidence remain `awaiting_external` or `layerx_confirmed` with
+`next_attempt_at` and `last_error` shown in the API. `reconciled` means the
+configured adapter confirmed all required L1 evidence; it does not change the
+payment state. Inspect records at `GET /v1/settlements/reconciliation` with a
+key holding `settlements:read`.
+An `adapter_not_configured` error means the worker lacks its L1 settlement
+contract address, commitment event topic, or confirmation depth; production
+startup rejects missing values. A `mismatch` status needs analyst review.
+Approval status updates can lag the configured expiry by up to one scan
 interval plus processing time. Webhook delivery is at least once: a worker may
 send successfully and stop before persisting the response, so receivers should
 deduplicate by `X-PaxRelay-Delivery-Id`. Requests have a 10-second default
 timeout, 1 MiB body limit, and 64 KiB response limit. Retryable failures use
 exponential backoff, capped at one hour, for up to eight attempts by default.
-The other four loops remain placeholders; do not use worker startup as evidence
-that settlement reconciliation, health probing, provider indexing, or analytics
-aggregation are running.
+The other three loops remain placeholders; do not use worker startup as evidence
+that health probing, provider indexing, or analytics aggregation are running.
 
 Webhook signatures use HMAC-SHA256 over the exact request bytes prefixed by the
 Unix timestamp, delivery ID, and event type:

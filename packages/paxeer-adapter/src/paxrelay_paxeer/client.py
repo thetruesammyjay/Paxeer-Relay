@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import httpx
@@ -10,9 +9,6 @@ import httpx
 from paxrelay_paxeer.layerx import LayerXClient
 from paxrelay_paxeer.lxp402 import verify_requirement_fields
 from paxrelay_paxeer.settlement import SettlementClient
-
-_TRANSACTION_HASH = re.compile(r"0x[0-9a-fA-F]{64}")
-
 
 class OfficialPaxeerAdapter:
     """Production adapter connecting PaxRelay to the live Paxeer Network.
@@ -27,12 +23,24 @@ class OfficialPaxeerAdapter:
         layerx_api_url: str,
         chain_id: int = 125,
         timeout: float = 15.0,
+        settlement_api_url: str | None = None,
+        l1_settlement_contract_address: str | None = None,
+        l1_commitment_event_topic: str | None = None,
+        l1_confirmation_blocks: int | None = None,
     ) -> None:
         self._rpc_url = rpc_url
         self._chain_id = chain_id
         self._timeout = timeout
         self._layerx = LayerXClient(layerx_api_url, timeout=timeout)
-        self._settlement = SettlementClient(rpc_url, timeout=timeout)
+        self._settlement = SettlementClient(
+            settlement_api_url,
+            rpc_url=rpc_url,
+            chain_id=chain_id,
+            l1_settlement_contract_address=l1_settlement_contract_address,
+            l1_commitment_event_topic=l1_commitment_event_topic,
+            l1_confirmation_blocks=l1_confirmation_blocks,
+            timeout=timeout,
+        )
 
     # ------------------------------------------------------------------
     # WalletAdapter
@@ -143,7 +151,10 @@ class OfficialPaxeerAdapter:
         batch_id = proof_claims.get("layerx_batch_id")
         if batch_id is not None and (
             not isinstance(batch_id, str)
-            or _TRANSACTION_HASH.fullmatch(batch_id) is None
+            or not batch_id
+            or len(batch_id) > 66
+            or batch_id.strip() != batch_id
+            or not batch_id.isprintable()
         ):
             return {"verified": False, "reason": "invalid_batch_id"}
 
@@ -164,10 +175,18 @@ class OfficialPaxeerAdapter:
         }
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any]:
-        settlement = await self._settlement.read_settlement(payment_id)
-        if settlement is None:
-            return {"payment_id": payment_id, "state": "unknown"}
-        return settlement
+        """Return unknown until a verified payment-ID status route is configured.
+
+        Settlement IDs and local payment IDs are different identifiers. The
+        reconciler uses the stored LayerX transaction hash for live evidence.
+        """
+        return {"payment_id": payment_id, "state": "unknown"}
+
+    async def get_layerx_transaction(
+        self, transaction_hash: str
+    ) -> dict[str, Any] | None:
+        """Read one LayerX transaction for post-payment reconciliation."""
+        return await self._layerx.get_transaction(transaction_hash)
 
     # ------------------------------------------------------------------
     # RegistryAdapter
@@ -208,7 +227,14 @@ class OfficialPaxeerAdapter:
         return await self._settlement.read_settlement(settlement_id)
 
     async def read_batch(self, batch_id: str) -> dict[str, Any] | None:
-        return await self._settlement.read_batch(batch_id)
+        return await self._layerx.get_batch(batch_id)
 
-    async def verify_l1_commitment(self, batch_id: str, commitment_hash: str) -> bool:
-        return await self._settlement.verify_l1_commitment(batch_id, commitment_hash)
+    async def verify_l1_commitment(
+        self,
+        transaction_hash: str,
+        commitment_hash: str,
+        expected_block_number: int,
+    ) -> bool | None:
+        return await self._settlement.verify_l1_commitment(
+            transaction_hash, commitment_hash, expected_block_number
+        )
