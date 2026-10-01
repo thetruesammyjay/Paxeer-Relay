@@ -48,8 +48,9 @@ Receipt v1 uses the PaxRelay canonical JSON rules implemented in
 
 This is a PaxRelay-specific canonicalization profile, not RFC 8785. Verifiers
 must preserve integer precision and apply the published rules exactly. The
-cross-language input/output vector is in
-[`receipt-test-vectors.md`](receipt-test-vectors.md).
+cross-language input/output vector and a Node.js reference verifier are in
+[`receipt-test-vectors.md`](receipt-test-vectors.md). Run the verifier with the
+published fixture before changing the canonicalization contract.
 
 ## Signatures and verification
 
@@ -62,9 +63,10 @@ the DER encoding and low-S form, and verifies with a supported EC public key.
 
 The gateway uses a generated development key when
 `RECEIPT_SIGNING_PRIVATE_KEY` is absent; production configuration rejects that
-fallback. There is no KMS/HSM implementation or public receipt-verification
-API in this checkout. The vector document is the interoperability contract;
-before processing real funds, verify it independently in a second language.
+fallback. The Node.js reference verifier is an independent implementation, but
+the vector still needs to be run in CI. There is no KMS/HSM implementation or
+public receipt-verification API in this checkout. Before processing real funds,
+wire vector verification into CI and define trusted-key rotation and revocation.
 
 No public receipt-verification API is currently exposed. The control-plane
 `GET /v1/receipts` lists tenant receipts; clients must not treat its response

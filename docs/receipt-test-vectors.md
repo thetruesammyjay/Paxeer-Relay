@@ -80,3 +80,21 @@ A verifier should recompute the canonical bytes and digest, compare the digest
 with `receipt_hash`, then accept the signature only when it matches the
 provided public key and is valid low-S DER. Changing the route score, timestamp,
 amount, or any other signed field must change the digest.
+
+## Run the Node.js reference verifier
+
+The repository includes an independent JavaScript verifier that uses Node's
+built-in cryptography and no additional package dependencies. The fixture files
+are `docs/vectors/receipt-v1.json` and
+`docs/vectors/receipt-v1-public.pem`. From the repository root, run:
+
+```powershell
+node tools/verify-receipt.mjs docs/vectors/receipt-v1.json docs/vectors/receipt-v1-public.pem
+```
+
+The command checks the canonical hash, trusted EC public key, strict DER and
+low-S signature form, and ECDSA signature. It prints the canonical bytes so
+they can be compared with the expected line above. It requires a Node.js
+runtime whose `JSON.parse` reviver provides the original numeric token as
+`context.source`; otherwise it rejects unsafe integer values rather than
+silently rounding them. The example key is public test material only.

@@ -2013,7 +2013,9 @@ timestamps; preserves integers exactly; and emits finite floats as normalized
 decimal JSON number tokens. It then serializes compact UTF-8 JSON, computes a
 SHA-256 digest, and signs the digest with low-S ECDSA. The exact rules and a
 cross-language vector are documented in `docs/execution-receipts.md` and
-`docs/receipt-test-vectors.md`.
+`docs/receipt-test-vectors.md`. The independent Node.js reference verifier is
+`tools/verify-receipt.mjs`; its sample receipt and public key are under
+`docs/vectors/`.
 
 ### Storage
 
