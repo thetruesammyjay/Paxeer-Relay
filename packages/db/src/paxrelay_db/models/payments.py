@@ -26,6 +26,7 @@ class ToolCallModel(Base, TenantMixin, TimestampMixin):
     request_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
     arguments_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     constraints_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     extra_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
 

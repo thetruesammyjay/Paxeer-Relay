@@ -769,6 +769,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "paxrelay-domain" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
@@ -778,6 +779,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "paxrelay-domain", editable = "packages/domain" },
     { name = "pydantic", specifier = ">=2.9.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.0" },
 ]
 

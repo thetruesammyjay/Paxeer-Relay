@@ -195,6 +195,10 @@ class ToolCall(BaseModel):
     request_hash: str | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
     constraints: dict[str, Any] = Field(default_factory=dict)
+    # The JSON-compatible provider result is retained for exact idempotent
+    # replay after a successful delivery. Wrapped by the repository as
+    # {"body": ...} so a JSON null result remains distinct from no saved result.
+    result_json: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

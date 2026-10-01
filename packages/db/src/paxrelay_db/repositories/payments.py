@@ -51,6 +51,7 @@ def _to_tool_call(m: ToolCallModel) -> ToolCall:
         request_hash=m.request_hash,
         arguments=m.arguments_json or {},
         constraints=m.constraints_json or {},
+        result_json=m.result_json,
         metadata=m.extra_metadata or {},
         created_at=m.created_at,
         updated_at=m.updated_at,
@@ -218,6 +219,7 @@ class SqlAlchemyToolCallRepository:
         m.request_hash = call.request_hash
         m.arguments_json = dict(call.arguments)
         m.constraints_json = dict(call.constraints)
+        m.result_json = dict(call.result_json) if call.result_json is not None else None
         m.extra_metadata = dict(call.metadata)
         await self._session.flush()
         await self._session.refresh(m)

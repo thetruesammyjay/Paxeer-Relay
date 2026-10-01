@@ -47,7 +47,7 @@ trusted only when access is restricted and backups are protected.
 | Bootstrap key exposure | The bootstrap command creates a full-scope key and prints it once. | Run it only from a controlled environment, store the value in a secret manager, issue narrower keys, and revoke the bootstrap key. |
 | Policy race | For daily/monthly budgets, the gateway locks the agent row before reading spend, includes active unexpired quote reservations, and consumes the reservation in the same transaction as the verified payment. PostgreSQL concurrency behavior still needs integration verification. | Verify simultaneous quote and proof submissions against PostgreSQL; keep budget reservation, payment, and nonce transitions atomic. |
 | Approval lifecycle | The gateway persists a tenant-scoped request and requires `approvals:write` for decisions. Decisions are row-locked and bound to the original provider, service version, amount, recipient, and policy version; current budget and policy rules are rechecked before issuing a quote. A worker expires overdue requests every 30 seconds and records the state transition and audit event in one transaction. Decisions are attributed to API keys, but separate-user identity and separation of duties are not enforced. | Use a dedicated approval key, add operator identity and role separation, and verify simultaneous expiration/decision/invoke transitions against PostgreSQL. |
-| Receipt signature implementation incomplete | Canonicalization rejects route-score floats; signer/verifier have ECDSA and prefix-parsing issues. | Correct and independently verify the canonicalization/signature contract before relying on receipts. |
+| Receipt signature verification depends on a shared canonicalization contract | Receipt v1 now normalizes route-score floats and timestamps, signs a SHA-256 digest with low-S ECDSA, and checks the stored hash and strict DER signature encoding. | Verify the published vectors in a second language; add trusted-key lookup, rotation, and revocation before external verification or real-fund use. |
 | External payment and execution are not atomic | Payment is marked verified before the provider call; provider failure does not refund or dispute it. The worker reads LayerX transaction, settlement, and batch evidence and checks the claimed L1 receipt, but it deliberately does not advance payment states. The endpoint contract, commitment event, and relationship between batch contents and the on-chain commitment still require validation with the network operator. | Define compensation and dispute procedures; validate the adapter contract with authoritative LayerX/Paxeer services and staging records before handling real funds. |
 
 ## Existing protective controls
@@ -103,9 +103,13 @@ recording the payment; duplicate proof submissions receive HTTP 409. The
 verified payment and consumed nonce are committed before provider dispatch.
 Quote intake takes a transaction advisory lock per agent/idempotency key and
 returns the stored quote or state for same-request retries. It rejects key reuse
-with a different payload. The gateway still does not replay the full stored
-result or recover every in-progress call. Verify the locking and replay contract
-with concurrent PostgreSQL submissions before release.
+with a different payload. Successful calls store the bounded provider result
+alongside the signed receipt; a replay returns both without forwarding to the
+provider again. Results may contain sensitive provider data, so access control,
+retention, and backup protections apply. Requests completed before migration
+`0010` have no saved result and cannot replay the full response. The gateway
+still does not recover every in-progress call. Verify the locking and replay
+contract with concurrent PostgreSQL submissions before release.
 
 ### Webhook forgery and destination abuse
 
@@ -121,10 +125,11 @@ receiver.
 
 ### Sensitive data in logs and receipts
 
-Request arguments and raw payment proof are persisted. Define field-level
-redaction and retention rules. Do not log bearer keys, private keys, full
-payment proofs, or sensitive provider payloads. A signed receipt can still
-contain sensitive identifiers, so access control remains necessary.
+Request arguments, completed provider results, and raw payment proof are
+persisted. Define field-level redaction and retention rules. Do not log bearer
+keys, private keys, full payment proofs, or sensitive provider payloads. A
+signed receipt can still contain sensitive identifiers, so access control
+remains necessary.
 
 ### Dependency and supply-chain risk
 
@@ -144,10 +149,12 @@ controls. At minimum:
 3. Add provider hostname allowlists, outbound egress rules, gateway concurrency
    limits, and edge rate limits. Body, response, and provider timeout caps are
    now configurable.
-4. Verify budget reservation and nonce consumption with concurrent PostgreSQL
-   submissions; make idempotency atomic and replay the full stored result.
+4. Verify budget reservation, nonce consumption, and full result replay with
+   concurrent PostgreSQL submissions; recover calls left in progress after a
+   gateway interruption.
 5. Complete payment failure, refund/dispute, and settlement reconciliation;
    verify approval expiration races against PostgreSQL.
-6. Correct receipt canonicalization and signature verification and publish
-   test vectors.
+6. Independently verify the published receipt canonicalization and signature
+   vectors in a second implementation; define trusted-key rotation and
+   revocation before exposing verification to customers.
 7. Complete a security review and incident response exercise.

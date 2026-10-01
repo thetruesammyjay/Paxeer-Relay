@@ -384,8 +384,13 @@ policy or an enforced policy denial returns 403. A policy result that requires
 approval returns HTTP 202 with an `approval_id`; a reviewer decides through
 the control-plane approval routes above.
 Repeating the same idempotency key and request returns its current quote or
-state. Reusing the key with different request data returns 409; an expired
-quote returns 410 and requires a new key.
+state. After successful delivery, it returns the saved `result` and signed
+`receipt` with `replayed: true`, without calling the provider again. Repeating
+the completion request for a delivered call returns the same saved result.
+Reusing the key with different request data returns 409; an expired quote
+returns 410 and requires a new key. Calls completed before migration `0010`
+have no saved provider result and return `completed_result_unavailable` on
+replay.
 
 ### `POST /v1/invoke/{tool_call_id}`
 

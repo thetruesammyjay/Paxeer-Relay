@@ -8,11 +8,15 @@ pattern for SQLAlchemy 2.x async engines.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+from pathlib import Path
+from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from dotenv import dotenv_values
 from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import the metadata and ALL models so target_metadata is complete for
 # autogenerate and so metadata.create_all covers every table.
@@ -22,14 +26,43 @@ import paxrelay_db  # noqa: F401  (imports every model via the package __init__)
 
 config = context.config
 
+# Show migration progress and the current database revision. The canonical
+# package config includes logging sections; the root and API entry-point
+# configs intentionally stay small and use standard INFO logging.
+if config.config_file_name and config.get_section("loggers"):
+    fileConfig(config.config_file_name)
+else:
+    logging.basicConfig(level=logging.INFO)
+
+
+def _load_database_url() -> str:
+    """Read DATABASE_URL from the shell or the current folder's .env.
+
+    The root .env is a fallback, so Alembic can be run from the repository,
+    apps/api, or packages/db without a separate --env-file argument.
+    """
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    repository_root = Path(__file__).resolve().parents[5]
+    candidates = (Path.cwd() / ".env", repository_root / ".env")
+    for env_path in candidates:
+        if not env_path.is_file():
+            continue
+        database_url = dotenv_values(env_path).get("DATABASE_URL")
+        if database_url:
+            os.environ["DATABASE_URL"] = database_url
+            return database_url
+
+    raise RuntimeError(
+        "DATABASE_URL is not set. Set it in the current folder's .env or in "
+        "the repository root .env before running Alembic."
+    )
+
 # Inject the runtime database URL. Alembic runs synchronously under the hood,
 # but our engine is async, so we keep the asyncpg driver here.
-_database_url = normalize_async_database_url(
-    os.environ.get(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/paxrelay",
-    )
-)
+_database_url = normalize_async_database_url(_load_database_url())
 # Alembic's ConfigParser interpolates percent signs; double them so URL-encoded
 # credentials (common in managed PostgreSQL connection strings) reach asyncpg.
 config.set_main_option("sqlalchemy.url", _database_url.replace("%", "%%"))

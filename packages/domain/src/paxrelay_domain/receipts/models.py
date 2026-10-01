@@ -54,14 +54,10 @@ class ReceiptRoutingSummary(BaseModel):
 class ExecutionReceipt(BaseModel):
     """A signed record of payment, execution and delivery for one tool call.
 
-    This is the canonical receipt format. Before signing, the receipt must be
-    canonicalized:
-      1. Remove the ``signature`` field.
-      2. Sort object keys deterministically.
-      3. Encode numbers and timestamps consistently.
-      4. Serialise using canonical JSON.
-      5. Hash with SHA-256.
-      6. Sign using the PaxRelay receipt signer.
+    This is the canonical receipt format. Before signing, the receipt package
+    omits ``signature``, ``receipt_hash``, and ``signing_key_id``, normalizes
+    timestamps and numeric tokens, sorts object keys, serializes compact UTF-8
+    JSON, hashes with SHA-256, and signs the digest with the configured signer.
 
     Matches the JSON example in the README exactly.
     """
@@ -86,7 +82,10 @@ class ExecutionReceipt(BaseModel):
     # Set after signing — absent during canonicalization
     receipt_hash: str | None = Field(
         default=None,
-        description="SHA-256 of the canonical receipt JSON (without signature).",
+        description=(
+            "SHA-256 of the canonical receipt JSON without signature, hash, "
+            "or signing key ID."
+        ),
     )
     signature: str | None = Field(
         default=None,

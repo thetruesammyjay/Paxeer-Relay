@@ -26,32 +26,45 @@ current invoke path.
 
 ## Canonical hashing
 
-Before hashing, the receipt package:
+Receipt v1 uses the PaxRelay canonical JSON rules implemented in
+`packages/receipts`:
 
-1. Removes `signature`, `receipt_hash`, and `signing_key_id`.
-2. Sorts object keys recursively.
-3. Encodes timestamps as UTC ISO-8601 strings and UUIDs as strings.
-4. Rejects floating-point values.
-5. Serialises compact UTF-8 JSON without extra whitespace.
-6. Computes a SHA-256 digest, represented as `0x`-prefixed lowercase hex.
+1. Remove the top-level `signature`, `receipt_hash`, and `signing_key_id`
+   fields. The key ID is used to select a trusted public key; it is not part
+   of the receipt facts being hashed.
+2. Sort object keys recursively by UTF-16 code units. Keys must be strings.
+3. Encode UUIDs as lowercase, hyphenated strings.
+4. Normalize `issued_at`, `execution.started_at`, and
+   `execution.completed_at` to UTC ISO-8601 with six fractional digits and a
+   `Z` suffix. Naive timestamps in existing records are treated as UTC.
+5. Keep integers as exact base-10 JSON integer tokens. This includes atomic
+   monetary amounts, even when they exceed JavaScript's safe-integer range.
+   Encode finite floats as their shortest round-trip decimal, without
+   exponent notation or trailing fractional zeroes. Negative zero becomes
+   `0`; NaN and infinity are rejected. The routing score is signed as a JSON
+   number, not a string.
+6. Serialize compact UTF-8 JSON without extra whitespace, then compute SHA-256
+   and represent the digest as `0x` plus 64 lowercase hexadecimal characters.
 
-Amounts remain integer atomic values. Receipt `score` is a float in the domain
-schema, so the current canonicalizer's blanket rejection of floats needs to be
-resolved before route scores can be signed reliably.
+This is a PaxRelay-specific canonicalization profile, not RFC 8785. Verifiers
+must preserve integer precision and apply the published rules exactly. The
+cross-language input/output vector is in
+[`receipt-test-vectors.md`](receipt-test-vectors.md).
 
 ## Signatures and verification
 
-`LocalReceiptSigner` is intended to sign the receipt hash using an ECDSA key
-and attach a `signing_key_id`. The gateway uses a generated development key
-when `RECEIPT_SIGNING_PRIVATE_KEY` is absent; that fallback must not be used as
-a production identity. There is no KMS/HSM implementation in this checkout.
+`LocalReceiptSigner` signs the 32-byte SHA-256 receipt digest using ECDSA with
+SHA-256 pre-hashing. It supports secp256k1 and P-256 PEM keys. Signatures use
+ASN.1 DER, are normalized to low-S form, and are returned as `0x`-prefixed
+hex. The verifier requires the receipt's stored hash to match its recomputed
+hash, checks any embedded signature against the supplied signature, validates
+the DER encoding and low-S form, and verifies with a supported EC public key.
 
-The current signer and verifier code has unresolved cryptography issues: the
-pre-hashed ECDSA algorithm is constructed incorrectly, and signature hex
-prefix parsing uses `lstrip` instead of removing only the `0x` prefix. The
-canonicalizer also rejects the floating-point route score. Treat signatures as
-an unfinished implementation until these issues are corrected and verification
-is exercised across independent implementations.
+The gateway uses a generated development key when
+`RECEIPT_SIGNING_PRIVATE_KEY` is absent; production configuration rejects that
+fallback. There is no KMS/HSM implementation or public receipt-verification
+API in this checkout. The vector document is the interoperability contract;
+before processing real funds, verify it independently in a second language.
 
 No public receipt-verification API is currently exposed. The control-plane
 `GET /v1/receipts` lists tenant receipts; clients must not treat its response
@@ -68,11 +81,10 @@ The repository has no implemented S3/R2 receipt archive and no on-chain receipt
 anchoring. LayerX transaction and batch IDs are references observed during
 payment verification, not receipt anchors.
 
-## Verification contract to complete
+## Verification boundary
 
-A future verifier should accept the receipt and a trusted public key selected
-by `signing_key_id`, recompute canonical bytes and hash, check the supplied
-hash, validate the signature, and report each check separately. Keep the
-claimed provider output outside the trust assertion: a valid PaxRelay signature
-means PaxRelay signed these recorded facts, not that the provider's content is
-correct.
+The library verifier accepts a receipt, its signature, and a public key. The
+caller remains responsible for selecting that trusted key using
+`signing_key_id`, checking key validity and rotation policy, and recording the
+verification result. A valid PaxRelay signature means PaxRelay signed these
+recorded facts; it does not prove that the provider's content is correct.

@@ -132,19 +132,25 @@ The gateway takes a PostgreSQL transaction advisory lock for
 with the same arguments returns the same unexpired payment requirement; reusing
 the key with different arguments, capability, or constraints returns HTTP 409.
 Terminal failures also return 409, and an expired quote returns 410 so a caller
-must choose a new key. Delivered requests return a replay marker, but the full
-stored response body is not replayed. Although the domain has retryable
-execution states and configuration for multiple provider attempts, the current
-invoke path creates one attempt and does not execute provider failover. Do not
-rely on automatic retries.
+must choose a new key. A delivered request replays its provider result and
+signed receipt from storage when the client repeats either the original invoke
+or its completion request. The gateway does not call the provider again.
+Results are bounded by `GATEWAY_MAX_RESPONSE_BYTES` and retained in the
+`tool_calls` row; apply the same access, backup, and retention controls used for
+other stored provider data. Requests completed before migration `0010` do not
+have a saved result and return HTTP 409 with `completed_result_unavailable` on
+replay. Although the domain has retryable execution states and configuration
+for multiple provider attempts, the current invoke path creates one attempt and
+does not execute provider failover. Do not rely on automatic retries.
 
 PaxRelay records nonce use in PostgreSQL with an atomic conditional update,
 while locking the same agent row used by budget reservations. A verified
 payment replaces its active reservation in the same transaction, so concurrent
 quotes cannot miss both the reservation and payment. The mock adapter also
 tracks used nonces in memory, but that process-local set is not the production
-replay control. Full idempotent result replay and recovery of calls left in the
-reserved state remain unfinished.
+replay control. Recovery of calls left in the reserved state remains
+unfinished; the database lock and replay behavior still need verification with
+concurrent PostgreSQL submissions.
 
 ## Local simulator
 

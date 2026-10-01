@@ -2007,14 +2007,13 @@ It is not necessarily proof that the provider’s output was factually correct.
 
 ### Canonicalisation
 
-Before signing:
-
-1. Remove the signature field.
-2. Sort object keys deterministically.
-3. Encode numbers and timestamps consistently.
-4. Serialise using canonical JSON.
-5. Hash with the configured cryptographic hash.
-6. Sign using the PaxRelay receipt signer.
+Before signing, PaxRelay removes `signature`, `receipt_hash`, and
+`signing_key_id`; sorts object keys by UTF-16 code units; normalizes UUIDs and
+timestamps; preserves integers exactly; and emits finite floats as normalized
+decimal JSON number tokens. It then serializes compact UTF-8 JSON, computes a
+SHA-256 digest, and signs the digest with low-S ECDSA. The exact rules and a
+cross-language vector are documented in `docs/execution-receipts.md` and
+`docs/receipt-test-vectors.md`.
 
 ### Storage
 
@@ -2329,6 +2328,17 @@ project_id + agent_id + idempotency_key
 
 The database must enforce uniqueness.
 
+Current gateway behavior serializes request intake with a PostgreSQL
+transaction advisory lock for `(agent_id, idempotency_key)`. Repeating the same
+request returns its active payment requirement or, after successful delivery,
+the saved provider result and signed receipt without forwarding to the provider
+again. Reusing the key with different arguments, capability, or constraints
+returns HTTP 409. Migration `0010_tool_call_result_replay` stores the bounded
+JSON provider result on the tool-call row. Calls completed before that
+migration have no saved result and cannot replay the full response. Concurrent
+database behavior and recovery of interrupted in-progress calls still require
+verification.
+
 ### Replay protection
 
 Bind payment proofs to:
@@ -2613,8 +2623,13 @@ The Docker services are intended for local development. Production uses Railway 
 ### Run database migrations
 
 ```bash
-uv run alembic upgrade head
+cd apps/api
+uv run python -m alembic upgrade head
 ```
+
+The same command works from `packages/db`. Alembic uses the shared migrations
+under `packages/db` and reads `DATABASE_URL` from the current folder's `.env`,
+with the repository root `.env` as a fallback.
 
 ### Seed development data
 

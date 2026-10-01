@@ -28,12 +28,18 @@ current API is still primarily authenticated by API keys. Production also
 requires a separate `WEBHOOK_ENCRYPTION_KEY` to protect endpoint signing
 secrets at rest.
 
-Apply all database migrations:
+Apply all database migrations. Alembic uses an existing shell `DATABASE_URL`;
+otherwise it reads the current folder's `.env`, then falls back to the
+repository root `.env`. Run the same command from either `apps/api` or
+`packages/db`:
 
 ```powershell
-cd packages/db
-uv run --env-file ../../.env alembic upgrade head
+uv run python -m alembic upgrade head
 ```
+
+The shared virtual environment is at the repository root. If you invoke its
+Python executable directly from `apps/api` or `packages/db`, use
+`..\..\.venv\Scripts\python.exe -m alembic upgrade head`.
 
 The PostgreSQL service in `docker-compose.yml` creates a local database named
 `paxrelay` with the default development credentials shown in `.env.example`.

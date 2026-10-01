@@ -162,9 +162,19 @@ class GatewayInvokeService:
                     tool_call_id=existing.id,
                 )
             if existing.request_state == RequestState.DELIVERED:
+                replay_body = await self._completed_result_body(existing)
+                if replay_body is None:
+                    return QuoteResult(
+                        status_code=409,
+                        body=_err(
+                            "completed_result_unavailable",
+                            "The completed request does not have a replayable result.",
+                        ),
+                        tool_call_id=existing.id,
+                    )
                 return QuoteResult(
                     status_code=200,
-                    body={"replayed": True, "tool_call_id": str(existing.id)},
+                    body=replay_body,
                     tool_call_id=existing.id,
                 )
             if existing.request_state == RequestState.PAYMENT_REQUIRED:
@@ -649,9 +659,19 @@ class GatewayInvokeService:
             # Do not reveal whether another agent's tool-call ID exists.
             return InvokeResult(status_code=404, body=_err("not_found", "tool_call_not_found"))
         if call.request_state == RequestState.DELIVERED:
+            replay_body = await self._completed_result_body(call)
+            if replay_body is None:
+                return InvokeResult(
+                    status_code=409,
+                    body=_err(
+                        "completed_result_unavailable",
+                        "The completed request does not have a replayable result.",
+                    ),
+                    tool_call_id=call.id,
+                )
             return InvokeResult(
                 status_code=200,
-                body={"replayed": True, "tool_call_id": str(call.id)},
+                body=replay_body,
                 tool_call_id=call.id,
             )
 
@@ -828,6 +848,7 @@ class GatewayInvokeService:
             update={
                 "request_state": RequestState.DELIVERED,
                 "execution_state": ExecutionState.SUCCEEDED,
+                "result_json": {"body": forward.response_body},
             }
         )
         await tool_calls.save(call)
@@ -840,6 +861,24 @@ class GatewayInvokeService:
             },
             tool_call_id=call.id,
         )
+
+    async def _completed_result_body(self, call: ToolCall) -> dict[str, Any] | None:
+        """Rebuild the original success envelope for an idempotent replay."""
+        stored_result = call.result_json
+        if stored_result is None or "body" not in stored_result:
+            return None
+
+        receipt = await SqlAlchemyReceiptRepository(self._session).get_by_tool_call(
+            call.id
+        )
+        if receipt is None:
+            return None
+
+        return {
+            "result": stored_result["body"],
+            "receipt": receipt.model_dump(mode="json"),
+            "replayed": True,
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -43,7 +43,7 @@ that data is disposable.
 | Gateway 402 | Payment is required or submitted proof did not verify | Check quote expiry and every bound proof field. Never bypass verification to force execution. |
 | Gateway 503 | LayerX or another payment verification dependency could not provide usable evidence | Wait for the dependency to recover, then retry with the same quote and proof. The gateway has not consumed the quote nonce. |
 | Gateway 202 | Policy requires human approval | Review the tenant-scoped approval in the API. After approval, the agent must retry the original invoke with the same idempotency key and payload before a payment quote is issued. |
-| Gateway 409 | The quote nonce was already claimed, or an idempotency key conflicts with stored request data/state | Do not resubmit a claimed proof or alter a request under the same key. Check the tool-call and execution-attempt records; a reserved call may need reconciliation after a gateway interruption. |
+| Gateway 409 | The quote nonce was already claimed, an idempotency key conflicts with stored request data/state, or a pre-migration completed call has no saved result | Do not resubmit a claimed proof or alter a request under the same key. Check the tool-call and execution-attempt records; a reserved call may need reconciliation after a gateway interruption. |
 | Gateway 410 | The payment quote expired | Start a new request with a new idempotency key to obtain a fresh quote. |
 | Gateway 413 | Invocation body exceeds `GATEWAY_MAX_REQUEST_BYTES` | Reduce the payload or review the configured cap. |
 | Gateway 429 | An authenticated API key exceeded the gateway request limit | Wait for `Retry-After` seconds or ask an administrator to review the key quota. |

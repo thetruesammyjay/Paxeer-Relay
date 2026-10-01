@@ -69,7 +69,7 @@ a placeholder.
 
 | Table | Purpose |
 | --- | --- |
-| `tool_calls` | One logical agent request, with tenant scope, capability, arguments, request hash, idempotency key, and independent request/payment/execution states |
+| `tool_calls` | One logical agent request, with tenant scope, capability, arguments, request hash, idempotency key, completed provider result for replay, and independent request/payment/execution states |
 | `route_decisions` | Provider/service version selected for the call, strategy, score, breakdown, explanation, and attempt number |
 | `quotes` | Immutable payment requirement: amount, recipient, chain, request hash, nonce, and expiry |
 | `budget_reservations` | Per-agent amount held against daily/monthly policy budgets while a quote is valid; expired quotes stop counting, and verified payment consumes the reservation atomically |
