@@ -214,8 +214,8 @@ The `/admin` dashboard is the internal platform overview. It is a separate
 experience from the organisation's PaxRelay workspace. Keep these regions in
 this order:
 
-Admin navigation includes `Overview`, `Creators`, `Activity`, `Workspaces`,
-`Platform health`, and `Settings`.
+Admin navigation includes `Overview`, `Creators`, `Activity`, `Settlement
+review`, `Workspaces`, `Platform health`, and `Settings`.
 
 1. Platform context, a plain-language heading, and links to creator review or
    platform activity.
@@ -232,6 +232,28 @@ Do not place a customer's private transaction or policy settings in the
 platform overview unless the admin's role explicitly grants that access. The
 current page is a sample-data preview; it does not approve creators or change
 platform configuration.
+
+### Settlement review
+
+The `/admin/settlements` route is a read-only queue backed by
+`GET /v1/settlements/reconciliation`. It is tenant-scoped by the API key, so
+label the project and environment scope instead of implying a cross-tenant
+platform view. Keep `Needs review`, `Waiting for evidence`, `LayerX confirmed`,
+and `Reconciled` filters beside the queue. Do not invent totals: the endpoint
+returns one cursor-paginated page at a time and does not return aggregate
+counts.
+
+Show the payment ID, payment state, reconciliation status, LayerX reference,
+and last-check time in the queue. Selecting a record reveals issue codes,
+expected and recorded values, available LayerX and L1 references, attempts,
+and the next check time. Never show raw payment proofs. The page refreshes its
+read-only list; it does not start another reconciliation or modify payments.
+
+The sign-in preview is not connected yet. During preview, an operator may
+paste a key with `settlements:read` scope. Keep it in page memory only, clear
+it on disconnect or reload, and label this as a temporary preview access path.
+Replace it with the authenticated admin session before production use; do not
+persist operator API keys in browser storage.
 
 ### Creator dashboard
 
@@ -276,6 +298,7 @@ provider-scoped authentication, and live creator data are not connected yet.
 | Shared page and state components | `apps/web/components/` | Reusable presentation pieces |
 | API boundary and query hooks | `apps/web/lib/`, `apps/web/hooks/` | Typed HTTP access; not yet wired to every screen |
 | Admin and creator overview pages | `apps/web/app/admin/page.tsx`, `apps/web/app/creator/page.tsx` | Current visual previews using sample data |
+| Settlement review | `apps/web/app/admin/settlements/`, `apps/web/components/settlement-review.tsx` | Tenant-scoped read-only queue, evidence details, and preview API-key entry |
 | Dashboard icons | `@hugeicons/react`, `@hugeicons/core-free-icons` | Hugeicons React renderer and free icon pack |
 
 The Next.js app must call the FastAPI API through `apps/web/lib/`. Browser

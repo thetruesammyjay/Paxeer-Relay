@@ -68,6 +68,11 @@ const ADMIN_GROUPS: NavGroup[] = [
       { href: "/admin", label: "Overview", icon: Home01Icon },
       { href: "/admin#creators", label: "Creators", icon: UserGroupIcon },
       { href: "/admin#activity", label: "Activity", icon: Activity01Icon },
+      {
+        href: "/admin/settlements",
+        label: "Settlement review",
+        icon: Invoice01Icon,
+      },
     ],
   },
   {
@@ -337,7 +342,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         : "Pax Labs";
   const workspaceDetail =
     workspace === "admin"
-      ? "Sample admin preview"
+      ? pathname === "/admin/settlements"
+        ? "Settlement review"
+        : "Sample admin preview"
       : workspace === "creator"
         ? "Sample creator preview"
         : "Sample workspace";
@@ -351,6 +358,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => {
     const [path, hash] = href.split("#");
     if (hash) return pathname === path && fragment === `#${hash}`;
+    if (["/admin", "/creator", "/dashboard"].includes(path)) {
+      return pathname === path && fragment.length === 0;
+    }
     const matchesPath = pathname === path || pathname.startsWith(`${path}/`);
     return matchesPath && !(pathname === path && fragment.length > 0);
   };
@@ -364,7 +374,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? [
           { href: "/admin", label: "Home", icon: Home01Icon },
           { href: "/admin#creators", label: "Creators", icon: UserGroupIcon },
-          { href: "/admin#activity", label: "Activity", icon: Activity01Icon },
+          {
+            href: "/admin/settlements",
+            label: "Review",
+            icon: Invoice01Icon,
+          },
         ]
       : workspace === "creator"
         ? [
@@ -472,7 +486,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="top-spacer" />
           <span className="network-pill network-demo">
             <i className="sample-mark" aria-hidden="true" />
-            Sample data · View only
+            {pathname === "/admin/settlements"
+              ? "Read-only API review"
+              : "Sample data · View only"}
           </span>
           <div className="operator">
             <span className="operator-avatar">SJ</span>

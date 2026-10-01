@@ -22,9 +22,11 @@ navigation from the current URL.
 
 `/admin` and `/creator` are preview pages and use sample data. Their navigation
 links to sections on the overview page with URL fragments, for example
-`/creator#requests`. They do not yet have separate nested resource routes or
-role-scoped authentication. The PaxRelay workspace keeps its existing resource
-routes, such as `/agents`, `/policies`, and `/transactions`.
+`/admin#creators` and `/creator#requests`. `/admin/settlements` is a live,
+read-only review screen backed by the tenant-scoped API. Sign-in remains a
+preview; the review screen accepts a `settlements:read` API key in page memory.
+The PaxRelay workspace keeps its existing resource routes, such as `/agents`,
+`/policies`, and `/transactions`.
 
 ## Current application tree
 
@@ -35,7 +37,8 @@ apps/web/
 │   │   ├── layout.tsx                 # Public sign-in route-group layout
 │   │   └── sign-in/page.tsx           # Sign-in preview; buttons are presentation only
 │   ├── admin/
-│   │   └── page.tsx                   # Platform admin dashboard preview
+│   │   ├── page.tsx                   # Platform admin dashboard preview
+│   │   └── settlements/page.tsx       # Read-only settlement review route
 │   ├── agents/page.tsx                # PaxRelay agent resource page
 │   ├── analytics/page.tsx             # Spend and capability analytics
 │   ├── api/
@@ -62,9 +65,11 @@ apps/web/
 │   ├── marketing-chrome.tsx           # Shared sticky public header and footer
 │   ├── reveal.tsx                     # Reduced-motion-aware scroll reveals
 │   ├── resource-page.tsx              # Shared presentation for resource screens
+│   ├── settlement-review.tsx          # Reconciliation queue and evidence details
 │   └── status-badge.tsx               # Shared status label
 ├── hooks/
-│   └── use-agents.ts                  # React Query hook for agents
+│   ├── use-agents.ts                  # React Query hook for agents
+│   └── use-settlement-reconciliation.ts # Typed reconciliation API query
 ├── lib/
 │   ├── api-client.ts                  # Typed browser HTTP boundary
 │   ├── providers.tsx                  # React Query provider setup
@@ -88,6 +93,10 @@ a URL. A route-group directory such as `(auth)` groups files without adding a
 segment to the URL. Root `layout.tsx` wraps pages with the shared application
 shell and imports the global stylesheet.
 
+`app/admin/settlements/page.tsx` composes `components/settlement-review.tsx`.
+The page uses `hooks/use-settlement-reconciliation.ts` for typed requests and
+cursor state; the hook calls the FastAPI route through `lib/api-client.ts`.
+
 ## Route map
 
 | URL | File | Purpose and status |
@@ -99,6 +108,7 @@ shell and imports the global stylesheet.
 | `/for-providers` | `app/for-providers/page.tsx` | Public introduction for online service providers. |
 | `/dashboard` | `app/dashboard/page.tsx` | PaxRelay organisation operations overview; metrics and events are sample data. |
 | `/admin` | `app/admin/page.tsx` | Internal platform admin overview; creator reviews, workspace list, health, and activity are sample data. |
+| `/admin/settlements` | `app/admin/settlements/page.tsx` | Tenant-scoped reconciliation review; reads API data with a `settlements:read` key. |
 | `/creator` | `app/creator/page.tsx` | Service-provider overview; services, requests, payment records, and profile are sample data. |
 | `/agents` | `app/agents/page.tsx` | PaxRelay agent inventory presentation. |
 | `/policies` | `app/policies/page.tsx` | PaxRelay spending policy presentation. |
@@ -114,8 +124,8 @@ shell and imports the global stylesheet.
 The admin and creator pages have overview sections for their mobile and desktop
 navigation. Current section destinations use URL fragments, such as
 `/admin#creators`, `/creator#services`, and `/creator#receipts`; these are not
-separate route files. Add nested routes only when each workflow has its own
-loading, empty, error, and populated states.
+separate route files. Settlement review is a nested route because it has its
+own API access, loading, empty, error, and populated states.
 
 The public landing page, informational pages, and sign-in preview do not use
 the dashboard shell. The landing page at `/` explains the product and links to
@@ -132,7 +142,7 @@ navigation sets:
 
 | Path prefix | Shell navigation |
 | --- | --- |
-| `/admin` | Platform overview, creators, activity, workspaces, platform health, and admin controls |
+| `/admin` | Platform overview, creators, activity, settlement review, workspaces, platform health, and admin controls |
 | `/creator` | Provider overview, services, requests, receipts, and profile settings |
 | Other dashboard routes | PaxRelay operate, configure, network, evidence, and workspace settings |
 
@@ -143,10 +153,10 @@ sheet contains quick links for the current workspace and links for switching
 dashboards. Its open state, Escape handling, focus, background scroll lock, and
 close actions are owned by `app-shell.tsx`.
 
-The admin and creator section links are same-page fragments until the nested
-routes are implemented. Do not change those links into routes that do not
-exist. The mobile navigation is styled in `app/globals.css`, including device
-safe-area spacing and the backdrop and bottom sheet.
+The admin and creator overview section links remain same-page fragments. The
+settlement review link uses its own route. The mobile navigation is styled in
+`app/globals.css`, including device safe-area spacing and the backdrop and
+bottom sheet.
 
 ## Icon usage
 
@@ -186,13 +196,16 @@ existing PaxRelay resource views. Keep shared behavior here and use
 
 `lib/api-client.ts` is the browser's typed HTTP boundary. It accepts a bearer
 token from its caller and unwraps the API error envelope. Hooks such as
-`hooks/use-agents.ts` own query keys and loading state. Pages should use the
-hooks instead of duplicating `fetch` calls.
+`hooks/use-agents.ts` and `hooks/use-settlement-reconciliation.ts` own query
+keys, request state, and API response types. Pages should use the hooks instead
+of duplicating `fetch` calls. The settlement review key is held only in React
+state, never in browser storage; disconnecting removes its query-cache entries.
 
-The client and agent hook are not connected to every screen. The current admin
-and creator overviews are entirely sample data, and most PaxRelay dashboard
-screens also use sample data. Do not describe a screen as live until it reads
-from the API and handles loading, empty, and error states.
+The API client is not connected to every screen. The current admin and creator
+overviews are sample data, and most PaxRelay dashboard screens also use sample
+data. Settlement review is live when a valid scoped key is supplied. The
+network adapter paths and response contracts still require operator
+confirmation before the data can be treated as production settlement evidence.
 
 ```text
 Route page

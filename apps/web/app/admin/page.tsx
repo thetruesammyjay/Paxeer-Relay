@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { Route } from "next";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Activity01Icon,
   Building01Icon,
   CheckmarkCircle01Icon,
+  Invoice01Icon,
   Notification03Icon,
   Settings01Icon,
   UserIcon,
@@ -114,10 +116,17 @@ export default function AdminDashboardPage() {
           </p>
         </div>
         <div className="page-actions">
-          <Link className="button" href="#activity">
-            View activity
+          <Link className="button primary" href={"/admin/settlements" as Route}>
+            <HugeiconsIcon
+              icon={Invoice01Icon}
+              size={16}
+              color="currentColor"
+              strokeWidth={1.7}
+              aria-hidden="true"
+            />
+            Review settlements
           </Link>
-          <Link className="button primary" href="#creators">
+          <Link className="button" href="#creators">
             <HugeiconsIcon
               icon={UserIcon}
               size={16}
