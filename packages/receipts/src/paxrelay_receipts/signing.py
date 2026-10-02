@@ -78,6 +78,14 @@ class LocalReceiptSigner:
     def key_id(self) -> str:
         return self._key_id
 
+    @property
+    def public_key_pem(self) -> str:
+        """Return the matching public key PEM for trusted verifier manifests."""
+        return self._private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+
     def sign(self, receipt_dict: dict) -> tuple[str, str]:
         """Canonicalize, hash, and sign the receipt.
 

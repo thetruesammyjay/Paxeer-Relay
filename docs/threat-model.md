@@ -47,7 +47,7 @@ trusted only when access is restricted and backups are protected.
 | Bootstrap key exposure | The bootstrap command creates a full-scope key and prints it once. | Run it only from a controlled environment, store the value in a secret manager, issue narrower keys, and revoke the bootstrap key. |
 | Policy race | For daily/monthly budgets, the gateway locks the agent row before reading spend, includes active unexpired quote reservations, and consumes the reservation in the same transaction as the verified payment. PostgreSQL concurrency behavior still needs integration verification. | Verify simultaneous quote and proof submissions against PostgreSQL; keep budget reservation, payment, and nonce transitions atomic. |
 | Approval lifecycle | The gateway persists a tenant-scoped request and requires `approvals:write` for decisions. Decisions are row-locked and bound to the original provider, service version, amount, recipient, and policy version; current budget and policy rules are rechecked before issuing a quote. A worker expires overdue requests every 30 seconds and records the state transition and audit event in one transaction. Decisions are attributed to API keys, but separate-user identity and separation of duties are not enforced. | Use a dedicated approval key, add operator identity and role separation, and verify simultaneous expiration/decision/invoke transitions against PostgreSQL. |
-| Receipt signature verification depends on a shared canonicalization contract | Receipt v1 normalizes route-score floats and timestamps, signs a SHA-256 digest with low-S ECDSA, and checks the stored hash and strict DER signature encoding. An independent Node.js verifier and a published signed vector are included. | Run the vector in CI; add trusted-key lookup, rotation, and revocation before external verification or real-fund use. |
+| Receipt signature verification depends on a shared canonicalization contract | Receipt v1 normalizes route-score floats and timestamps, signs a SHA-256 digest with low-S ECDSA, and checks the stored hash and strict DER signature encoding. An independent Node.js verifier, a published signed vector, and a Python keyring for key lookup and lifecycle checks are included. | Run the vector in CI; keep trust manifests current and distribute revocations promptly before external verification or real-fund use. |
 | External payment and execution are not atomic | Payment is marked verified before the provider call; provider failure does not refund or dispute it. The worker reads LayerX transaction, settlement, and batch evidence and checks the claimed L1 receipt, but it deliberately does not advance payment states. The endpoint contract, commitment event, and relationship between batch contents and the on-chain commitment still require validation with the network operator. | Define compensation and dispute procedures; validate the adapter contract with authoritative LayerX/Paxeer services and staging records before handling real funds. |
 
 ## Existing protective controls
@@ -155,6 +155,7 @@ controls. At minimum:
 5. Complete payment failure, refund/dispute, and settlement reconciliation;
    verify approval expiration races against PostgreSQL.
 6. Run the published receipt canonicalization and signature vector through the
-   independent Node.js verifier in CI; define trusted-key rotation and
-   revocation before exposing verification to customers.
+   independent Node.js verifier in CI; establish controlled distribution for
+   the trusted-key manifest and prompt revocation updates before exposing
+   verification to customers.
 7. Complete a security review and incident response exercise.

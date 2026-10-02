@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 import re
 
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import (
@@ -39,7 +39,7 @@ def verify_receipt_signature(
         return False, "invalid_public_key"
     try:
         public_key = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, UnsupportedAlgorithm):
         return False, "invalid_public_key"
     if not isinstance(public_key, ec.EllipticCurvePublicKey):
         return False, "invalid_public_key_type"

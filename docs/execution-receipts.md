@@ -85,8 +85,25 @@ payment verification, not receipt anchors.
 
 ## Verification boundary
 
-The library verifier accepts a receipt, its signature, and a public key. The
-caller remains responsible for selecting that trusted key using
-`signing_key_id`, checking key validity and rotation policy, and recording the
-verification result. A valid PaxRelay signature means PaxRelay signed these
+`verify_receipt_signature` accepts a receipt, its signature, and one public
+key. The caller must select that key using `signing_key_id` and apply any
+rotation policy. A valid PaxRelay signature means PaxRelay signed these
 recorded facts; it does not prove that the provider's content is correct.
+
+`ReceiptKeyring` provides that key selection for Python consumers. Its version
+1 JSON manifest contains public keys with `active`, `retired`, or `revoked`
+status and an explicit `not_before` timestamp. Retired keys also require
+`not_after`; they remain valid for receipts issued before that time. Revoked
+keys are rejected for every receipt because compromise can make claimed issue
+times untrustworthy. The keyring rejects overlapping active/retired validity
+windows and duplicate key IDs. Distribute manifest updates through a controlled
+configuration channel; the package does not fetch trust data from a remote
+endpoint or expose a public key-management API.
+
+Construct a keyring with `ReceiptKeyring.from_json(manifest_text)` and verify a
+receipt with `keyring.verify(receipt_dict)`. The result is `(valid, reason)`.
+`LocalReceiptSigner.public_key_pem` returns the public half of a configured
+local signer for adding to the manifest; it never returns the private key.
+Keep the active private key in the gateway's secret manager. For routine
+rotation, publish the new public key with its activation time and retire the
+old key at the same cutover time so existing receipts remain verifiable.

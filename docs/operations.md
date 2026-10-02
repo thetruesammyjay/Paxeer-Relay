@@ -129,6 +129,11 @@ asynchronously.
 
 - Store `.env`, database credentials, API keys, and receipt signing keys in a
   secret manager outside local development.
+- Keep the receipt verification keyring manifest under controlled versioning.
+  Add a new public key before its signing cutover, mark the former key retired
+  with that cutover as `not_after`, and distribute the updated manifest to all
+  verifiers. Mark compromised keys revoked and distribute that update promptly;
+  revoked keys invalidate receipts signed with that key.
 - The API stores a SHA-256 hash of each API key and returns the raw key only at
   creation. API keys have per-resource scopes, a 90-day default expiry, an
   inventory endpoint, and a revocation endpoint. A key cannot grant scopes it

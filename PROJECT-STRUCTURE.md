@@ -2015,7 +2015,9 @@ SHA-256 digest, and signs the digest with low-S ECDSA. The exact rules and a
 cross-language vector are documented in `docs/execution-receipts.md` and
 `docs/receipt-test-vectors.md`. The independent Node.js reference verifier is
 `tools/verify-receipt.mjs`; its sample receipt and public key are under
-`docs/vectors/`.
+`docs/vectors/`. Python consumers can use the `ReceiptKeyring` in
+`packages/receipts` to resolve signing key IDs and enforce activation,
+retirement, and revocation windows from a versioned public-key manifest.
 
 ### Storage
 

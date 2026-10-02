@@ -2,6 +2,7 @@
 
 from paxrelay_receipts.canonical import canonical_json, receipt_to_canonical
 from paxrelay_receipts.hashing import hash_body, hash_canonical_dict, hash_receipt, sha256_hex
+from paxrelay_receipts.keyring import ReceiptKeyring, ReceiptVerificationKey
 from paxrelay_receipts.signing import LocalReceiptSigner, ReceiptSigner
 from paxrelay_receipts.verification import verify_receipt_signature
 
@@ -12,6 +13,8 @@ __all__ = [
     "hash_canonical_dict",
     "hash_receipt",
     "sha256_hex",
+    "ReceiptKeyring",
+    "ReceiptVerificationKey",
     "LocalReceiptSigner",
     "ReceiptSigner",
     "verify_receipt_signature",
