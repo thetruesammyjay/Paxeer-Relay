@@ -14,8 +14,11 @@ Local defaults:
 | Paid-call gateway | `http://localhost:8080` | No OpenAPI route is currently enabled; `/health` is liveness and `/ready` checks dependencies |
 | Simulator | `http://localhost:8090` | `/docs` |
 
-Control-plane routes under `/v1` require `Authorization: Bearer <api-key>`.
-Keys are stored as SHA-256 hashes and looked up by their `pk_` prefix. The
+Control-plane routes under `/v1` require `Authorization: Bearer <api-key>`,
+except for the public receipt verification key manifest at
+`GET /v1/receipt-keys`. That endpoint contains public keys only and does not
+grant access to tenant receipts or other API resources. Keys are stored as
+SHA-256 hashes and looked up by their `pk_` prefix. The
 authenticated key supplies the organisation, project, and environment used for
 tenant scoping. Each route also requires its specific API-key scope. `/health`
 is a public liveness route; `/ready` checks PostgreSQL and checks Redis when
@@ -268,6 +271,7 @@ project, the key request is:
 | --- | --- |
 | `GET /transactions` | Filter by `agent_id`, `request_state`, `payment_state`, `created_after`, and `created_before`; `limit` defaults to 50 and is capped at 100. |
 | `GET /receipts` | Filter by `agent_id` or `tool_call_id`; `limit` defaults to 50 and is capped at 100. |
+| `GET /receipt-keys` | Public version 1 manifest of receipt verification keys. |
 | `GET /analytics/spend` | One spend aggregate for `period=daily` or `period=monthly` and an optional `start_date` / `end_date` range. |
 | `GET /analytics/capabilities` | Spend grouped by capability with optional dates and `limit` (1–100, default 20). |
 
@@ -276,6 +280,15 @@ Analytics defaults to the previous 30 days. `start_date` must precede
 `anchored_l1`; it does not mean every counted payment has an L1 anchor. The
 current `period` value is echoed in the response; the endpoint does not return
 a separate row for each day or month.
+
+`GET /receipt-keys` reads the public manifest configured by
+`RECEIPT_PUBLIC_KEYRING_FILE`. It returns `Cache-Control: no-store` and reads
+the file on each request so rotations and revocations take effect without an
+API restart. It returns HTTP 503 if the setting is absent or the manifest is
+unavailable or invalid. Keep the file limited to public keys; this endpoint
+does not accept receipts or perform signature verification. The response is a
+version 1 object with a `keys` array; each entry contains `key_id`,
+`public_key_pem`, `status`, `not_before`, and `not_after`.
 
 ### Settlement review
 

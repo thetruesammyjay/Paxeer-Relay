@@ -40,6 +40,10 @@ class ApiSettings(BaseSettings):
     )
     readiness_timeout_seconds: float = Field(default=3.0, gt=0, le=15)
     api_max_request_bytes: int = Field(default=1_048_576, ge=1_024, le=10_485_760)
+    # Public manifest used by clients to verify signed execution receipts.
+    # The endpoint reads it for each request so key rotation and revocation
+    # updates become visible without restarting the API.
+    receipt_public_keyring_file: Path | None = None
 
     # Redis-backed request limits are on by default in staging/production.
     redis_url: str = Field(

@@ -32,6 +32,7 @@ from paxrelay_api.routes.keys import router as keys_router
 from paxrelay_api.routes.policies import router as policies_router
 from paxrelay_api.routes.providers import router as providers_router
 from paxrelay_api.routes.receipts import router as receipts_router
+from paxrelay_api.routes.receipt_keys import router as receipt_keys_router
 from paxrelay_api.routes.settlements import router as settlements_router
 from paxrelay_api.routes.services import router as services_router
 from paxrelay_api.routes.transactions import router as transactions_router
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(policies_router, prefix="/v1")
     app.include_router(keys_router, prefix="/v1")
     app.include_router(receipts_router, prefix="/v1")
+    app.include_router(receipt_keys_router, prefix="/v1")
     app.include_router(settlements_router, prefix="/v1")
     app.include_router(transactions_router, prefix="/v1")
     app.include_router(analytics_router, prefix="/v1")

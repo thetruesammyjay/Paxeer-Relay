@@ -9,6 +9,9 @@ dependencies = [
     "paxrelay-domain",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8.3.0", "pytest-asyncio>=0.24.0"]
+
 [tool.uv.sources]
 paxrelay-domain = { workspace = true }
 

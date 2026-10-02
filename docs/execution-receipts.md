@@ -64,13 +64,17 @@ the DER encoding and low-S form, and verifies with a supported EC public key.
 The gateway uses a generated development key when
 `RECEIPT_SIGNING_PRIVATE_KEY` is absent; production configuration rejects that
 fallback. The Node.js reference verifier is an independent implementation, but
-the vector still needs to be run in CI. There is no KMS/HSM implementation or
-public receipt-verification API in this checkout. Before processing real funds,
-wire vector verification into CI and define trusted-key rotation and revocation.
+the Python CI workflow runs the published vector and the keyring/SDK tests on
+pushes and pull requests. There is no KMS/HSM implementation or API that
+accepts receipts and verifies them. The control-plane API can serve a
+public-only key manifest at `GET /v1/receipt-keys` when
+`RECEIPT_PUBLIC_KEYRING_FILE` is configured. Before processing real funds,
+review a successful CI run and establish controlled signing-key operations.
 
-No public receipt-verification API is currently exposed. The control-plane
+No API endpoint currently verifies receipt signatures. The control-plane
 `GET /v1/receipts` lists tenant receipts; clients must not treat its response
-alone as cryptographic verification.
+alone as cryptographic verification. `GET /v1/receipt-keys` distributes trust
+data only.
 
 ## Persistence and limits
 
@@ -96,12 +100,28 @@ status and an explicit `not_before` timestamp. Retired keys also require
 `not_after`; they remain valid for receipts issued before that time. Revoked
 keys are rejected for every receipt because compromise can make claimed issue
 times untrustworthy. The keyring rejects overlapping active/retired validity
-windows and duplicate key IDs. Distribute manifest updates through a controlled
-configuration channel; the package does not fetch trust data from a remote
-endpoint or expose a public key-management API.
+windows and duplicate key IDs. The Python SDK's
+`paxrelay.fetch_receipt_keyring(url)` fetches and validates the manifest from a
+trusted endpoint over HTTPS (HTTP is allowed only for loopback development).
+The control-plane endpoint does not require authentication because the
+manifest contains public keys only. It disables caching and reads the file on
+each request so key updates become available without an API restart. There is
+no public key-management API: change the controlled manifest file to perform a
+rotation or revocation.
 
-Construct a keyring with `ReceiptKeyring.from_json(manifest_text)` and verify a
-receipt with `keyring.verify(receipt_dict)`. The result is `(valid, reason)`.
+Python consumers can load a manifest with
+`ReceiptKeyring.from_json(manifest_text)` and call
+`keyring.verify(receipt_dict)`, which returns `(valid, reason)`. The SDK also
+offers `paxrelay.fetch_receipt_keyring(url)` and
+`paxrelay.verify_receipt(receipt_dict, keyring)`. The latter returns a
+`ReceiptVerificationResult` with `valid` and `reason` fields. For example:
+
+```python
+keyring = await paxrelay.fetch_receipt_keyring(
+    "https://api.example.com/v1/receipt-keys"
+)
+result = paxrelay.verify_receipt(receipt, keyring)
+```
 `LocalReceiptSigner.public_key_pem` returns the public half of a configured
 local signer for adding to the manifest; it never returns the private key.
 Keep the active private key in the gateway's secret manager. For routine

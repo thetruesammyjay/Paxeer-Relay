@@ -97,4 +97,5 @@ low-S signature form, and ECDSA signature. It prints the canonical bytes so
 they can be compared with the expected line above. It requires a Node.js
 runtime whose `JSON.parse` reviver provides the original numeric token as
 `context.source`; otherwise it rejects unsafe integer values rather than
-silently rounding them. The example key is public test material only.
+silently rounding them. The same command runs on pushes and pull requests in
+`.github/workflows/python.yml`. The example key is public test material only.

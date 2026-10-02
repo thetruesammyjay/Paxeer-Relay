@@ -8,12 +8,12 @@ This document contains the detailed product specification, system design, and de
 
 The repository is in pre-alpha and in an active refactor.
 
-- The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, and PostgreSQL readiness reporting. The gateway and dashboard still have production security gaps.
+- The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, public receipt-key distribution, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, and PostgreSQL readiness reporting. The gateway and dashboard still have production security gaps.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
 - The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
 - The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation; provider health, analytics, and indexing remain unfinished.
-- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK and MCP module files are placeholders, and the TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
+- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK is mostly placeholder modules but includes receipt verification and public-key manifest retrieval; the Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
 The specification below preserves the technical design that was previously in README.md. Treat feature descriptions as product intent unless the corresponding implementation exists in the current source tree.
@@ -1183,7 +1183,7 @@ Contains provider filtering, scoring and failover logic.
 
 ### `packages/receipts`
 
-Canonicalises execution data, generates hashes, signs receipts and verifies previously issued receipts.
+Canonicalises execution data, generates hashes, signs receipts, verifies signatures, and resolves trusted public keys through an activation/retirement/revocation keyring.
 
 ### `packages/mcp-python`
 
@@ -1195,7 +1195,7 @@ Provider and agent integrations for TypeScript MCP applications.
 
 ### `packages/sdk-python`
 
-Public Python client for the PaxRelay API and Gateway.
+Currently exposes receipt verification through a trusted keyring and can fetch the public keyring manifest from the API. The general API and Gateway client methods remain unimplemented.
 
 ### `packages/sdk-typescript`
 
@@ -2017,7 +2017,10 @@ cross-language vector are documented in `docs/execution-receipts.md` and
 `tools/verify-receipt.mjs`; its sample receipt and public key are under
 `docs/vectors/`. Python consumers can use the `ReceiptKeyring` in
 `packages/receipts` to resolve signing key IDs and enforce activation,
-retirement, and revocation windows from a versioned public-key manifest.
+retirement, and revocation windows from a versioned public-key manifest. The
+control-plane API serves the configured manifest at the public
+`GET /v1/receipt-keys` endpoint, and the Python SDK provides
+`paxrelay.fetch_receipt_keyring(url)` to retrieve and validate it.
 
 ### Storage
 

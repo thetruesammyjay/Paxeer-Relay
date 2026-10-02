@@ -158,6 +158,7 @@ include:
 | `PAXEER_RPC_URL` | Gateway and worker | Must use HTTPS in production. |
 | `RECEIPT_SIGNING_PRIVATE_KEY` | Gateway | Production requires a protected PEM key; keep it in a secret manager. |
 | `RECEIPT_SIGNING_KEY_ID` | Gateway | Must identify the production receipt key and cannot be `local-development`. |
+| `RECEIPT_PUBLIC_KEYRING_FILE` | Control-plane API | Optional path to the public version 1 receipt-key manifest served at `GET /v1/receipt-keys`; mount it read-only and replace it atomically for rotation or revocation updates. |
 | `NEXT_PUBLIC_API_BASE_URL` | Web | Defaults to `http://localhost:8000` in the client wrapper. |
 
 The API reads the repository `.env` and an optional `apps/api/.env` when it is

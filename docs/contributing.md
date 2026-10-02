@@ -66,6 +66,18 @@ scripts defined in `apps/web/package.json`. Run relevant checks for code you
 change before opening a pull request. Do not claim a test passed unless it was
 run against the current change.
 
+The receipt keyring, Python SDK verifier, and cross-language receipt vector are
+checked by `.github/workflows/python.yml`. Run the same focused checks locally
+from the repository root:
+
+```powershell
+uv sync --package paxrelay-receipts --extra test
+uv run --package paxrelay-receipts --extra test pytest packages/receipts/tests
+uv sync --package paxrelay --extra test
+uv run --package paxrelay --extra test pytest packages/sdk-python/tests
+node tools/verify-receipt.mjs docs/vectors/receipt-v1.json docs/vectors/receipt-v1-public.pem
+```
+
 ## Pull requests
 
 Each pull request should explain:

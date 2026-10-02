@@ -236,6 +236,23 @@ class ReceiptOut(BaseModel):
     issued_at: datetime
 
 
+class ReceiptVerificationKeyOut(BaseModel):
+    """One public key and its accepted receipt issue-time window."""
+
+    key_id: str
+    public_key_pem: str
+    status: Literal["active", "retired", "revoked"]
+    not_before: datetime
+    not_after: datetime | None
+
+
+class ReceiptKeyringOut(BaseModel):
+    """Public receipt-verification manifest served to SDK consumers."""
+
+    version: Literal[1]
+    keys: list[ReceiptVerificationKeyOut]
+
+
 # ---------------------------------------------------------------------------
 # Transactions
 # ---------------------------------------------------------------------------

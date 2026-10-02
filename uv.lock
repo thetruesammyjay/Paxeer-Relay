@@ -693,14 +693,25 @@ version = "0.1.0"
 source = { editable = "packages/sdk-python" }
 dependencies = [
     { name = "httpx" },
+    { name = "paxrelay-receipts" },
     { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "paxrelay-receipts", editable = "packages/receipts" },
     { name = "pydantic", specifier = ">=2.9.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24.0" },
 ]
+provides-extras = ["test"]
 
 [[package]]
 name = "paxrelay-api"
@@ -908,12 +919,21 @@ dependencies = [
     { name = "pydantic" },
 ]
 
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=43.0.0" },
     { name = "paxrelay-domain", editable = "packages/domain" },
     { name = "pydantic", specifier = ">=2.9.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24.0" },
 ]
+provides-extras = ["test"]
 
 [[package]]
 name = "paxrelay-router"
