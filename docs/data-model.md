@@ -55,6 +55,8 @@ checkout.
 | `services` | Provider service name, capability, supported protocol, price, endpoint base, delivery and health configuration |
 | `service_versions` | Versioned invocation target, endpoint URL, pricing, delivery configuration, and optional schema |
 | `provider_metrics` | Reputation, success, latency, availability, call count, failure streak, and health status |
+| `analytics_spend_rollups` | Hourly/daily committed spend by organisation, project, environment, agent, capability, currency, and bucket |
+| `analytics_refresh_state` | Last successful rollup refresh and coverage window for each worker environment |
 | `policies` | Policy metadata and version/mode |
 | `policy_rules` | Spending, capability, provider, quality, approval, and session rules |
 | `policy_assignments` | Link between an agent and a policy |
@@ -82,6 +84,14 @@ success, latency, and failure-streak metrics from execution attempts.
 Provider indexing uses a composite index on execution-attempt service-version,
 creation time, and ID so its rolling window queries can find recent attempts
 without scanning unrelated execution history.
+
+The analytics worker rebuilds only the configured recent windows in a single
+transaction. Hourly rows default to 30 days and daily rows to 400 days. These
+rollups are used by analytics queries for complete days after a recent refresh;
+the API reads partial-day boundaries from payments directly. The
+`analytics_refresh_state` row records the successful refresh time and coverage
+window for each worker environment, allowing the API to fall back to source
+queries when rollups are stale or unavailable.
 
 The domain keeps the state machines separate:
 

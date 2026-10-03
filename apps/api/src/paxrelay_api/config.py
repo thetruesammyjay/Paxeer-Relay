@@ -60,6 +60,7 @@ class ApiSettings(BaseSettings):
     api_rate_limit_enabled: bool | None = None
     api_rate_limit_max_requests: int = Field(default=300, ge=1, le=100_000)
     api_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    analytics_rollup_max_age_seconds: int = Field(default=180, ge=30, le=3600)
 
     # Database
     database_url: str = Field(

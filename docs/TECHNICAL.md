@@ -71,7 +71,8 @@ approvals, fans supported outbox events into durable delivery rows, and sends
 HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation
 checks local payment facts and reads LayerX/Paxeer adapter evidence, but the
 external settlement endpoint contract still needs validation with the network
-operator. Provider health probes and rolling provider metrics are implemented;
-the analytics materializer remains a placeholder. Analytics API routes provide
-tenant-scoped spend and capability aggregates. Do not use mock output as evidence
-of a real payment or settlement.
+operator. Provider health probes and rolling provider metrics are implemented.
+The worker maintains recent hourly and daily spend rollups per tenant, agent,
+and capability. Analytics API routes use fresh daily rollups for complete days
+and query payment records directly for partial days or when rollups are missing
+or stale. Do not use mock output as evidence of a real payment or settlement.

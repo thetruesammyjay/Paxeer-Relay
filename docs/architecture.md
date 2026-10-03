@@ -32,7 +32,9 @@ results. Approval expiry, webhook delivery, and the reconciliation worker are
 active. Reconciliation compares local payment/intent/quote facts, then reads
 LayerX transaction evidence and can read settlement/batch evidence through the
 configured adapter. Provider health probing and execution-metric indexing are
-implemented. The separate background analytics materializer remains unfinished.
+implemented. The worker also rebuilds recent hourly and daily tenant spend
+rollups. The analytics API uses current daily rollups for complete days and
+falls back to payment records for partial days or stale rollups.
 The gateway's paid-call orchestration is the most complete request path, but its
 default payment adapter is mock mode.
 
@@ -87,7 +89,10 @@ and records mismatches for tenant review. It never advances payment state.
 Provider indexing aggregates rolling success, latency, and failure streaks from
 terminal execution attempts. Health checks use per-service read-only paths,
 bounded HTTPS requests, DNS pinning, and the configured hostname allowlist in
-staging and production. The analytics materializer remains a placeholder.
+staging and production. Analytics rebuilds recent hourly and daily tenant
+spend rollups transactionally. The API uses only complete daily buckets and
+falls back to source payment queries for partial-day boundaries or when the
+worker has not refreshed recently.
 
 ### `apps/simulator`
 

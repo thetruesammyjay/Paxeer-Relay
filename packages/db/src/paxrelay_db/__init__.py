@@ -12,6 +12,10 @@ from paxrelay_db.models.users import Membership, Organisation, User
 from paxrelay_db.models.projects import ApiKey, Project
 from paxrelay_db.models.agents import AgentModel, WalletModel
 from paxrelay_db.models.budget import BudgetReservationModel
+from paxrelay_db.models.analytics import (
+    AnalyticsRefreshStateModel,
+    AnalyticsSpendRollupModel,
+)
 from paxrelay_db.models.policies import PolicyAssignmentModel, PolicyModel, PolicyRuleModel
 from paxrelay_db.models.providers import (
     ProviderMetricsModel,
@@ -60,6 +64,8 @@ __all__ = [
     "AgentModel",
     "WalletModel",
     "BudgetReservationModel",
+    "AnalyticsSpendRollupModel",
+    "AnalyticsRefreshStateModel",
     # Policies
     "PolicyAssignmentModel",
     "PolicyModel",

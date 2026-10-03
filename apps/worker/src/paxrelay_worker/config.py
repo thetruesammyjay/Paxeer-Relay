@@ -114,7 +114,9 @@ class WorkerSettings(BaseSettings):
     reconciliation_retry_max_seconds: int = Field(default=3600, ge=30, le=86400)
 
     # Analytics aggregation
-    analytics_flush_interval_seconds: int = 60
+    analytics_flush_interval_seconds: int = Field(default=60, ge=5, le=3600)
+    analytics_hourly_retention_days: int = Field(default=30, ge=1, le=90)
+    analytics_daily_retention_days: int = Field(default=400, ge=30, le=3650)
 
     @model_validator(mode="after")
     def require_production_webhook_key(self) -> "WorkerSettings":
@@ -133,6 +135,11 @@ class WorkerSettings(BaseSettings):
         if self.reconciliation_retry_max_seconds < self.reconciliation_retry_initial_seconds:
             raise ValueError(
                 "RECONCILIATION_RETRY_MAX_SECONDS must be at least the initial retry delay"
+            )
+        if self.analytics_daily_retention_days < self.analytics_hourly_retention_days:
+            raise ValueError(
+                "ANALYTICS_DAILY_RETENTION_DAYS must be at least "
+                "ANALYTICS_HOURLY_RETENTION_DAYS"
             )
         if not self.use_mock_adapter:
             if not self.layerx_api_url or not self.paxeer_settlement_api_url:

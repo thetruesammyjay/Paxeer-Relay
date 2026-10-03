@@ -282,7 +282,12 @@ Analytics defaults to the previous 30 days. `start_date` must precede
 `end_date`. Spend counts payment states `verified`, `settled_layerx`, and
 `anchored_l1`; it does not mean every counted payment has an L1 anchor. The
 current `period` value is echoed in the response; the endpoint does not return
-a separate row for each day or month.
+a separate row for each day or month. The API uses the worker's daily rollups
+for complete UTC days when the last successful refresh is within
+`ANALYTICS_ROLLUP_MAX_AGE_SECONDS` (180 seconds by default). It reads partial
+days directly from payment records and falls back to direct queries when
+rollups are missing, stale, or outside their retained date range. The end date
+is inclusive.
 
 `GET /receipt-keys` reads the public manifest configured by
 `RECEIPT_PUBLIC_KEYRING_FILE`. It returns `Cache-Control: no-store` and reads
