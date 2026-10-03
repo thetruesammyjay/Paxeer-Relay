@@ -1,7 +1,7 @@
 [project]
 name = "paxrelay"
 version = "0.1.0"
-description = "PaxRelay Python SDK for agent and provider integration"
+description = "Async PaxRelay Python SDK for agents, providers, services, policies, approvals, and receipts"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27.0",

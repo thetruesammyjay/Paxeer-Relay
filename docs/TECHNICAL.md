@@ -13,6 +13,9 @@ which parts are present in the current checkout.
   database migration, API and web commands.
 - [API reference](api-reference.md) — control-plane, gateway, and simulator
   routes, inputs, outputs, and current limitations.
+- [Python SDK guide](../packages/sdk-python/README.md) — connect to the API and
+  manage tenant agents, providers, services, spend policies, and approvals
+  from Python.
 - [Architecture](architecture.md) — application roles, data flow, and trust
   boundaries.
 - [Operations](operations.md) — health checks, worker status, payment failures,

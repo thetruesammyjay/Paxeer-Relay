@@ -13,7 +13,7 @@ The repository is in pre-alpha and in an active refactor.
 - The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
 - The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation; provider health, analytics, and indexing remain unfinished.
-- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK is mostly placeholder modules but includes receipt verification and public-key manifest retrieval; the Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
+- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK now supports tenant-scoped agent, provider, service, policy, and approval operations plus receipt verification and public-key manifest retrieval; transaction, payment, and gateway client methods remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
 The specification below preserves the technical design that was previously in README.md. Treat feature descriptions as product intent unless the corresponding implementation exists in the current source tree.
@@ -1195,7 +1195,12 @@ Provider and agent integrations for TypeScript MCP applications.
 
 ### `packages/sdk-python`
 
-Currently exposes receipt verification through a trusted keyring and can fetch the public keyring manifest from the API. The general API and Gateway client methods remain unimplemented.
+Provides an async control-plane client for registering and looking up agents and providers, publishing services, creating and assigning spend policies, reviewing approval requests, and reading agent wallets. It also supports local receipt verification and fetching the public receipt-key manifest. Transaction, payment, and Gateway client methods remain unimplemented.
+
+The package source includes `client.py` for HTTP transport, `agents.py`,
+`approvals.py`, `providers.py`, `services.py`, and `policies.py` for resource
+operations, `models.py` for typed responses, and `exceptions.py` for API and
+transport failures. `payments.py` remains a placeholder.
 
 ### `packages/sdk-typescript`
 
