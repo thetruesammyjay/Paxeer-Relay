@@ -79,8 +79,9 @@ reconciliation as authorization to release funds.
 ## 402LXP requirement and proof checks
 
 The adapter builds a version 1 requirement containing scheme `402LXP`, network
-`paxeer`, chain ID 125, settlement layer `layerx`, currency USDX, decimals,
-atomic amount, recipient, quote ID, request hash, expiry, and nonce.
+`paxeer`, the configured chain ID (125 for the current production target),
+settlement layer `layerx`, currency USDX, decimals, atomic amount, recipient,
+quote ID, request hash, expiry, and nonce.
 
 Before adapter verification, the gateway compares proof claims to the stored
 quote and rejects an expired quote or mismatched quote ID, request hash,

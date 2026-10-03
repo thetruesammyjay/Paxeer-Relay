@@ -109,6 +109,7 @@ class GatewayInvokeService:
         allowed_provider_hosts: frozenset[str] | None = None,
         approval_ttl_seconds: int = 900,
         require_provider_wallet: bool = False,
+        chain_id: int = 125,
     ) -> None:
         self._session = session
         self._paxeer = paxeer
@@ -124,6 +125,7 @@ class GatewayInvokeService:
         self._allow_private_provider_endpoints = allow_private_provider_endpoints
         self._require_provider_wallet = require_provider_wallet
         self._allowed_provider_hosts = allowed_provider_hosts
+        self._chain_id = chain_id
 
     # ------------------------------------------------------------------
     # Phase 1 — request intake and the 402 challenge
@@ -609,6 +611,7 @@ class GatewayInvokeService:
             recipient_address=recipient,
             request_hash=request_hash,
             ttl_seconds=self._quote_ttl_seconds,
+            chain_id=self._chain_id,
         )
         await SqlAlchemyPaymentRepository(self._session).save_quote(quote)
         call = call.model_copy(

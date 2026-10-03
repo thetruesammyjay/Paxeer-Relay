@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from paxrelay.models import Service
+from paxrelay.models import Service, ServiceHealth
 
 if TYPE_CHECKING:
     from paxrelay.client import AsyncPaxRelayClient
@@ -33,6 +33,7 @@ class ServicesResource:
         protocols: Sequence[ServiceProtocol] = ("http",),
         version: str = "1.0.0",
         description: str | None = None,
+        health: ServiceHealth | None = None,
     ) -> Service:
         """Publish a service and its initial immutable routing version.
 
@@ -55,6 +56,8 @@ class ServicesResource:
             "version": version,
             "description": description,
         }
+        if health is not None:
+            payload["health"] = health.model_dump()
         result = await self._client._request(
             "POST",
             f"services/providers/{self._client._path_id(provider_id)}",

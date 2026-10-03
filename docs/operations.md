@@ -83,8 +83,8 @@ The worker starts seven periodic job loops:
 | Approval expiration | 30 seconds | Marks overdue pending or approved requests and their still-pending tool calls expired; writes an audit row in the same transaction. A locked row is skipped until the next scan. |
 | Outbox fan-out | 5 seconds | Moves supported transactional events into durable webhook delivery rows. |
 | Webhook delivery | 2 seconds | Claims due rows, signs and sends bounded HTTP requests, and applies retry or terminal state. |
-| Health check | 30 seconds | Logs a stub tick; does not probe service URLs. |
-| Provider indexing | 60 seconds | Logs a stub tick; does not refresh metrics. |
+| Health check | 30 seconds | Probes each due active service's configured health path with a bounded GET, rejects unsafe DNS results, pins requests to checked public IPs outside development/test, and removes a service from routing after its configured consecutive-failure threshold. |
+| Provider indexing | 60 seconds | Aggregates terminal provider attempts over the configured rolling window into per-service success rate, average latency, call count, and trailing failure count. |
 | Analytics | Configured, 60 seconds by default | Logs a stub tick; does not aggregate records. |
 | Settlement reconciliation | Configured, 30 seconds by default | Compares payment, intent, and quote; reads LayerX transaction and settlement/batch evidence; verifies the claimed L1 receipt when configured. Uses a short database claim and exponential retry. Records mismatches and emits a webhook event; does not change payment state. |
 
@@ -105,8 +105,10 @@ send successfully and stop before persisting the response, so receivers should
 deduplicate by `X-PaxRelay-Delivery-Id`. Requests have a 10-second default
 timeout, 1 MiB body limit, and 64 KiB response limit. Retryable failures use
 exponential backoff, capped at one hour, for up to eight attempts by default.
-The other three loops remain placeholders; do not use worker startup as evidence
-that health probing, provider indexing, or analytics aggregation are running.
+The analytics aggregation loop remains a placeholder and does not materialize
+hourly or daily spend rows. Health probing and provider indexing update routing
+metrics, but do not validate payment-network availability or guarantee that a
+provider's paid operation will succeed.
 
 Webhook signatures use HMAC-SHA256 over the exact request bytes prefixed by the
 Unix timestamp, delivery ID, and event type:

@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import httpx
 
+from paxrelay.models import ReceiptSummary
 from paxrelay_receipts import ReceiptKeyring
+
+if TYPE_CHECKING:
+    from paxrelay.client import AsyncPaxRelayClient
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,3 +102,28 @@ def _validate_receipt_keys_url(url: str) -> None:
     }
     if parsed.scheme != "https" and not local_http:
         raise ValueError("Receipt keyring URLs must use HTTPS outside loopback development.")
+
+
+class ReceiptsResource:
+    """Read receipt summaries in the API key's tenant."""
+
+    def __init__(self, client: AsyncPaxRelayClient) -> None:
+        self._client = client
+
+    async def list(
+        self,
+        *,
+        agent_id: UUID | str | None = None,
+        tool_call_id: UUID | str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ReceiptSummary]:
+        """List receipt summaries with optional agent/tool-call filters."""
+        params: dict[str, object] = {"limit": limit, "offset": offset}
+        if agent_id is not None:
+            params["agent_id"] = self._client._path_id(agent_id)
+        if tool_call_id is not None:
+            params["tool_call_id"] = self._client._path_id(tool_call_id)
+
+        result = await self._client._request("GET", "receipts", params=params)
+        return [ReceiptSummary.model_validate(item) for item in result]

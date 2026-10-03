@@ -61,6 +61,7 @@ def verify_requirement_fields(
     expected_nonce: str,
     expires_at: datetime,
     now: datetime | None = None,
+    expected_chain_id: int = 125,
 ) -> tuple[bool, str]:
     """Validate all required fields of an incoming payment proof.
 
@@ -104,7 +105,12 @@ def verify_requirement_fields(
     if proof_claims.get("nonce") != expected_nonce:
         return False, "nonce_mismatch"
 
-    if proof_claims.get("chain_id") != 125:
+    chain_id = proof_claims.get("chain_id")
+    if (
+        isinstance(chain_id, bool)
+        or not isinstance(chain_id, int)
+        or chain_id != expected_chain_id
+    ):
         return False, "wrong_chain"
 
     if proof_claims.get("payment_scheme") != "402LXP":

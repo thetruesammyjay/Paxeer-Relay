@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class APIModel(BaseModel):
@@ -54,6 +55,31 @@ class Money(APIModel):
     decimals: int
 
 
+class ServiceHealth(APIModel):
+    endpoint: str = Field(default="/health", min_length=1, max_length=512)
+    interval_seconds: int = Field(default=30, ge=5, le=3600)
+    timeout_seconds: int = Field(default=5, ge=1, le=30)
+    failure_threshold: int = Field(default=3, ge=1, le=20)
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            not value.startswith("/")
+            or value.startswith("//")
+            or "\\" in value
+            or parsed.scheme
+            or parsed.netloc
+            or parsed.query
+            or parsed.fragment
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+            or any(segment in {".", ".."} for segment in parsed.path.split("/"))
+        ):
+            raise ValueError("health endpoint must be a safe absolute path")
+        return value
+
+
 class Service(APIModel):
     id: UUID
     provider_id: UUID
@@ -64,6 +90,7 @@ class Service(APIModel):
     status: str
     base_url: str | None
     price_per_call: Money | None
+    health: ServiceHealth = Field(default_factory=ServiceHealth)
     description: str | None
 
 
@@ -109,3 +136,61 @@ class ApprovalRequest(APIModel):
     expires_at: datetime | None
     decided_at: datetime | None
     created_at: datetime
+
+
+class Transaction(APIModel):
+    """A tenant-scoped tool-call transaction summary."""
+
+    id: UUID
+    agent_id: UUID
+    capability: str
+    request_state: str
+    payment_state: str
+    execution_state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReceiptSummary(APIModel):
+    """A tenant-scoped summary of a signed execution receipt."""
+
+    id: UUID
+    tool_call_id: UUID
+    agent_id: UUID
+    provider_id: UUID
+    service_id: UUID
+    service_version: str
+    capability: str
+    request_hash: str
+    response_hash: str
+    payment_amount: int
+    payment_currency: str
+    layerx_transaction: str | None
+    execution_latency_ms: int
+    execution_status: str
+    receipt_hash: str | None
+    signature: str | None
+    signing_key_id: str | None
+    issued_at: datetime
+
+
+class AnalyticsSpend(APIModel):
+    """Committed-spend total returned for a requested date window."""
+
+    period: str
+    start_date: datetime
+    end_date: datetime
+    total_amount_atomic: int
+    currency: str
+    decimals: int
+    transaction_count: int
+
+
+class AnalyticsCapability(APIModel):
+    """Committed-spend aggregate for one service capability."""
+
+    capability: str
+    total_amount_atomic: int
+    currency: str
+    decimals: int
+    call_count: int

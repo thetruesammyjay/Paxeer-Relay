@@ -152,6 +152,7 @@ def _invoke_service(session: AsyncSession) -> GatewayInvokeService:
         allow_private_provider_endpoints=c.settings.app_env in {"development", "test"},
         require_provider_wallet=not c.settings.use_mock_adapter,
         allowed_provider_hosts=c.settings.provider_endpoint_hosts or None,
+        chain_id=c.settings.paxeer_chain_id,
     )
 
 

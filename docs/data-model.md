@@ -61,9 +61,9 @@ checkout.
 
 Publishing a service through the current API creates a service, an immutable
 version snapshot, and an initial metrics row. The initial metrics use perfect
-success/reputation/availability values and zero latency until a real health
-measurement exists. The worker that should refresh those values is currently
-a placeholder.
+success/reputation/availability values and zero latency. The health worker
+updates availability and health state; provider indexing refreshes rolling
+success, latency, and failure-streak metrics from execution attempts.
 
 ## Call, payment, and execution records
 
@@ -78,6 +78,10 @@ a placeholder.
 | `execution_attempts` | Each provider forward attempt, status, HTTP code, timestamps, latency, and retryability |
 | `execution_receipts` | Canonical receipt JSON, hashes, signature, signing key ID, and issue time |
 | `settlement_records` | LayerX transaction/batch and L1 settlement/anchor details, local/external check times, retry count/lease, reconciliation status, and safe mismatch issue codes |
+
+Provider indexing uses a composite index on execution-attempt service-version,
+creation time, and ID so its rolling window queries can find recent attempts
+without scanning unrelated execution history.
 
 The domain keeps the state machines separate:
 

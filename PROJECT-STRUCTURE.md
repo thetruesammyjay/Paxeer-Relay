@@ -12,8 +12,8 @@ The repository is in pre-alpha and in an active refactor.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
 - The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
-- The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation; provider health, analytics, and indexing remain unfinished.
-- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK now supports tenant-scoped agent, provider, service, policy, and approval operations plus receipt verification and public-key manifest retrieval; transaction, payment, and gateway client methods remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
+- The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, probes configured provider health paths, indexes recent execution metrics, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation; background analytics materialization remains unfinished. The API provides tenant-scoped spend and capability aggregates.
+- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK now supports tenant-scoped agent, provider, service, policy, approval, receipt-history, transaction-history, and spend-analytics operations plus local receipt verification and public-key manifest retrieval; transaction mutations, payment, and gateway client methods remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
 The specification below preserves the technical design that was previously in README.md. Treat feature descriptions as product intent unless the corresponding implementation exists in the current source tree.
@@ -1195,12 +1195,14 @@ Provider and agent integrations for TypeScript MCP applications.
 
 ### `packages/sdk-python`
 
-Provides an async control-plane client for registering and looking up agents and providers, publishing services, creating and assigning spend policies, reviewing approval requests, and reading agent wallets. It also supports local receipt verification and fetching the public receipt-key manifest. Transaction, payment, and Gateway client methods remain unimplemented.
+Provides an async control-plane client for registering and looking up agents and providers, publishing services, creating and assigning spend policies, reviewing approval requests, reading receipt and transaction history, reading spend analytics, and reading agent wallets. It also supports local receipt verification and fetching the public receipt-key manifest. Receipt listing returns summaries; transaction mutations, payment, and Gateway client methods remain unimplemented.
 
 The package source includes `client.py` for HTTP transport, `agents.py`,
-`approvals.py`, `providers.py`, `services.py`, and `policies.py` for resource
-operations, `models.py` for typed responses, and `exceptions.py` for API and
-transport failures. `payments.py` remains a placeholder.
+`approvals.py`, `analytics.py`, `providers.py`, `receipts.py`, `services.py`,
+`policies.py`, and `transactions.py` for resource operations; `receipts.py`
+also provides receipt verification helpers. `models.py` contains typed
+responses, and `exceptions.py` contains API and transport failures.
+`payments.py` remains a placeholder.
 
 ### `packages/sdk-typescript`
 
@@ -3137,7 +3139,7 @@ Public SDKs should be versioned independently through Changesets or an equivalen
 * [ ] Release TypeScript SDK.
 * [ ] Implement provider scoring.
 * [ ] Implement routing strategies.
-* [ ] Add provider health checks.
+* [x] Add provider health checks.
 * [ ] Add provider circuit breakers.
 * [ ] Add safe failover.
 * [ ] Add routing explanations.

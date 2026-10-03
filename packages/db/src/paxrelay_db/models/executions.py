@@ -26,6 +26,14 @@ from paxrelay_db.base import Base, TenantMixin, TimestampMixin, pk_uuid
 
 class ExecutionAttemptModel(Base, TimestampMixin):
     __tablename__ = "execution_attempts"
+    __table_args__ = (
+        Index(
+            "ix_execution_attempts_service_version_created",
+            "service_version_id",
+            "created_at",
+            "id",
+        ),
+    )
     id: Mapped[str] = pk_uuid()
     tool_call_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)
     payment_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)

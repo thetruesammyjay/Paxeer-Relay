@@ -66,7 +66,7 @@ An allowed request receives a short-lived quote. A quote binds:
 - tool-call ID;
 - provider and immutable service-version IDs;
 - amount and currency;
-- chain ID (125) and recipient;
+- configured chain ID (125 by default) and recipient;
 - canonical request hash;
 - a unique random nonce; and
 - an expiry time (300 seconds by default).
@@ -87,8 +87,8 @@ The agent submits `POST /v1/invoke/{tool_call_id}` with the same bearer key and
 agent ID, plus a JSON object whose `proof` property is itself a JSON string.
 The gateway confirms that the stored call belongs to that exact agent before
 loading its quote. The local verifier checks expiry,
-quote ID, request hash, amount, recipient, nonce, chain ID 125, and payment
-scheme. It then calls the configured adapter. The official adapter additionally
+quote ID, request hash, amount, recipient, nonce, the quote's configured chain
+ID, and payment scheme. It then calls the configured adapter. The official adapter additionally
 requires a `layerx_transaction_hash` and asks LayerX for that transaction,
 checking amount, recipient, and quote ID/memo.
 

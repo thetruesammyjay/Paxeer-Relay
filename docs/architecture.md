@@ -31,7 +31,8 @@ pages are largely static prototypes, and the simulator returns fabricated
 results. Approval expiry, webhook delivery, and the reconciliation worker are
 active. Reconciliation compares local payment/intent/quote facts, then reads
 LayerX transaction evidence and can read settlement/batch evidence through the
-configured adapter. Provider health, indexing, and analytics remain unfinished.
+configured adapter. Provider health probing and execution-metric indexing are
+implemented. The separate background analytics materializer remains unfinished.
 The gateway's paid-call orchestration is the most complete request path, but its
 default payment adapter is mock mode.
 
@@ -83,7 +84,10 @@ timeouts and bodies, and retry leases. Delivery is at least once, so consumers
 must deduplicate by delivery ID. Reconciliation claims due records, performs
 external reads outside the database transaction, retries incomplete evidence,
 and records mismatches for tenant review. It never advances payment state.
-Indexing, analytics, and health `tick()` methods remain placeholders.
+Provider indexing aggregates rolling success, latency, and failure streaks from
+terminal execution attempts. Health checks use per-service read-only paths,
+bounded HTTPS requests, DNS pinning, and the configured hostname allowlist in
+staging and production. The analytics materializer remains a placeholder.
 
 ### `apps/simulator`
 

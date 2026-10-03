@@ -104,7 +104,17 @@ fabricates payment and settlement results. The worker expires policy approvals,
 fans supported outbox events into delivery rows, sends signed webhooks, and
 reconciles local payment facts with LayerX transaction reads. It supports
 settlement and batch reads through a separately configured adapter endpoint.
-Provider health, analytics, and provider indexing remain unfinished.
+Provider health probes and routing-metric indexing are implemented; worker
+analytics materialization remains unfinished. Staging and production require
+`USE_MOCK_ADAPTER=false` and exact provider hostnames in
+`PROVIDER_ENDPOINT_HOST_ALLOWLIST`. This keeps staging on the configured
+network adapter and limits provider requests to approved hosts. Staging must
+also set `PAXEER_NETWORK_ENVIRONMENT` to `testnet` or `staging`; it cannot use
+the `mainnet` label. This is a startup guard on the declared environment. Verify
+the RPC and LayerX endpoint identities and the reported chain ID with the
+network operator before submitting any staging payment; the label does not
+independently attest the configured endpoints. Staging must provide its own
+HTTPS `PAXEER_RPC_URL` and `LAYERX_API_URL`; the default mainnet RPC is rejected.
 
 ## Environment variables
 
@@ -123,7 +133,7 @@ include:
 | `GATEWAY_RATE_LIMIT_MAX_REQUESTS` | Gateway | Maximum requests per key per window; defaults to 120. |
 | `GATEWAY_RATE_LIMIT_WINDOW_SECONDS` | Gateway | Fixed-window duration; defaults to 60 seconds. |
 | `GATEWAY_RATE_LIMIT_ENABLED` | Gateway | Optional override for development/staging. Production cannot disable rate limiting. |
-| `PROVIDER_ENDPOINT_HOST_ALLOWLIST` | Gateway | Comma-separated exact hostnames that provider URLs may target. Required in production; wildcard entries are not supported. |
+| `PROVIDER_ENDPOINT_HOST_ALLOWLIST` | Gateway and worker | Comma-separated exact hostnames that provider URLs may target. Required in staging and production; wildcard entries are not supported. |
 | `API_MAX_REQUEST_BYTES` | Control-plane API | Maximum write-request body size; defaults to 1 MiB and can be set from 1 KiB to 10 MiB. |
 | `GATEWAY_MAX_REQUEST_BYTES` | Gateway | Maximum invocation request body; defaults to 1 MiB and can be set from 1 KiB to 10 MiB. |
 | `GATEWAY_MAX_RESPONSE_BYTES` | Gateway | Maximum provider response body; defaults to 10 MiB and can be set from 1 KiB to 100 MiB. |
@@ -145,17 +155,21 @@ include:
 | `RECONCILIATION_CLAIM_LEASE_SECONDS` | Worker | Reclaims rows held by a stopped worker; must exceed five upstream request timeouts. |
 | `RECONCILIATION_RETRY_INITIAL_SECONDS` | Worker | Initial retry delay for incomplete or unavailable external evidence; defaults to 30 seconds. |
 | `RECONCILIATION_RETRY_MAX_SECONDS` | Worker | Maximum exponential retry delay; defaults to one hour. |
+| `PROVIDER_HEALTH_CONCURRENCY` | Worker | Maximum number of simultaneous provider health checks; defaults to 10. |
+| `PROVIDER_METRICS_WINDOW_DAYS` | Worker | Rolling history window for provider success and latency metrics; defaults to 7 days. |
+| `PROVIDER_METRICS_TRAILING_ATTEMPTS` | Worker | Maximum recent attempts scanned for a failure streak; defaults to 100. |
 | `READINESS_TIMEOUT_SECONDS` | API and gateway | PostgreSQL and Redis readiness deadline; defaults to 3 seconds. |
 | `APP_ENV` | API, gateway, and worker | Use the same tenant environment for the services; accepted values are `development`, `test`, `staging`, and `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
-| `USE_MOCK_ADAPTER` | Gateway and worker | Defaults to true for development. Production startup rejects true. |
+| `USE_MOCK_ADAPTER` | Gateway and worker | Defaults to true for development. Staging and production startup reject true. |
+| `PAXEER_NETWORK_ENVIRONMENT` | Gateway and worker | Use `testnet` or `staging` for staging deployments and `mainnet` for production. Staging startup rejects `mainnet`. |
 | `LAYERX_API_URL` | Gateway and worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects `GET /transactions/{transaction_hash}` to return the transaction amount, recipient, and quote ID/memo. |
 | `PAXEER_ADAPTER_TIMEOUT_SECONDS` | Worker | Timeout for each individual LayerX or settlement read; defaults to 15 seconds. |
 | `PAXEER_SETTLEMENT_API_URL` | Worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects a read-only `GET /settlement/{settlement_id}` resource. Confirm this assumed path and response fields with the network operator. |
-| `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS` | Worker | Production-required deployed contract address used to filter receipt logs. |
-| `PAXEER_L1_COMMITMENT_EVENT_TOPIC` | Worker | Production-required 32-byte event signature topic. The verifier looks for the exact commitment as an indexed topic or 32-byte ABI data word. |
-| `PAXEER_L1_CONFIRMATION_BLOCKS` | Worker | Production-required positive confirmation depth, set from Paxeer's finality policy. |
-| `PAXEER_CHAIN_ID` | Gateway and worker | Current production target is chain ID 125. |
-| `PAXEER_RPC_URL` | Gateway and worker | Must use HTTPS in production. |
+| `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS` | Worker | Required in staging and production; deployed contract address used to filter receipt logs. |
+| `PAXEER_L1_COMMITMENT_EVENT_TOPIC` | Worker | Required in staging and production; 32-byte event signature topic. The verifier looks for the exact commitment as an indexed topic or 32-byte ABI data word. |
+| `PAXEER_L1_CONFIRMATION_BLOCKS` | Worker | Required in staging and production; positive confirmation depth set from the network's finality policy. |
+| `PAXEER_CHAIN_ID` | Gateway and worker | The current production target is chain ID 125. Configure the staging network's chain ID for staging. |
+| `PAXEER_RPC_URL` | Gateway and worker | Staging and production require HTTPS. Staging must use its configured network's endpoint. |
 | `RECEIPT_SIGNING_PRIVATE_KEY` | Gateway | Production requires a protected PEM key; keep it in a secret manager. |
 | `RECEIPT_SIGNING_KEY_ID` | Gateway | Must identify the production receipt key and cannot be `local-development`. |
 | `RECEIPT_PUBLIC_KEYRING_FILE` | Control-plane API | Optional path to the public version 1 receipt-key manifest served at `GET /v1/receipt-keys`; mount it read-only and replace it atomically for rotation or revocation updates. |

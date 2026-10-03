@@ -100,11 +100,13 @@ class OfficialPaxeerAdapter:
     ) -> dict[str, Any]:
         # Payment requirements are built locally from quote data
         # No external call needed — the requirement IS the quote fields
+        if quote.get("chain_id") != self._chain_id:
+            raise ValueError("quote chain ID does not match the configured adapter")
         return {
             "version": "1",
             "payment_scheme": "402LXP",
             "network": "paxeer",
-            "chain_id": self._chain_id,
+            "chain_id": quote["chain_id"],
             "settlement_layer": "layerx",
             "currency": quote["currency"],
             "currency_decimals": quote["currency_decimals"],
@@ -131,6 +133,13 @@ class OfficialPaxeerAdapter:
         expires_at = datetime.fromisoformat(
             quote["expires_at"].rstrip("Z")
         )
+        quote_chain_id = quote.get("chain_id")
+        if (
+            isinstance(quote_chain_id, bool)
+            or not isinstance(quote_chain_id, int)
+            or quote_chain_id != self._chain_id
+        ):
+            return {"verified": False, "reason": "wrong_chain"}
 
         ok, reason = verify_requirement_fields(
             proof_claims=proof_claims,
@@ -140,6 +149,7 @@ class OfficialPaxeerAdapter:
             expected_recipient=quote["recipient_address"],
             expected_nonce=quote["nonce"],
             expires_at=expires_at,
+            expected_chain_id=quote_chain_id,
         )
         if not ok:
             return {"verified": False, "reason": reason}

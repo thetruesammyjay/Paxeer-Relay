@@ -1,6 +1,7 @@
 """PaxRelay Python SDK public surface."""
 
 from paxrelay.approvals import ApprovalDecision, ApprovalStatus
+from paxrelay.analytics import AnalyticsPeriod
 from paxrelay.client import AsyncPaxRelayClient
 from paxrelay.exceptions import (
     APIValidationError,
@@ -17,12 +18,17 @@ from paxrelay.exceptions import (
 from paxrelay.models import (
     Agent,
     AgentWallet,
+    AnalyticsCapability,
+    AnalyticsSpend,
     ApprovalRequest,
     Money,
     Policy,
     PolicyAssignment,
     Provider,
+    ReceiptSummary,
     Service,
+    ServiceHealth,
+    Transaction,
 )
 from paxrelay.policies import PolicyMode
 from paxrelay.receipts import (
@@ -36,6 +42,9 @@ __all__ = [
     "APIValidationError",
     "Agent",
     "AgentWallet",
+    "AnalyticsCapability",
+    "AnalyticsPeriod",
+    "AnalyticsSpend",
     "ApprovalDecision",
     "ApprovalRequest",
     "ApprovalStatus",
@@ -53,11 +62,14 @@ __all__ = [
     "PolicyMode",
     "Provider",
     "RateLimitError",
+    "ReceiptSummary",
     "ReceiptKeyring",
     "ReceiptVerificationKey",
     "ReceiptVerificationResult",
     "ResourceNotFoundError",
     "Service",
+    "ServiceHealth",
+    "Transaction",
     "fetch_receipt_keyring",
     "verify_receipt",
 ]

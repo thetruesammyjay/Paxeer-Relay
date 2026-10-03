@@ -2,7 +2,8 @@
 
 The Python SDK provides an async client for the control-plane API. It can
 register and inspect agents and providers, publish services, configure spend
-policies, review approvals, and verify signed execution receipts.
+policies, review approvals, read receipt and transaction history, and verify
+signed execution receipts.
 
 ## Install
 
@@ -56,6 +57,9 @@ the `async with` block ends.
 ## Register a provider and publish a service
 
 ```python
+from paxrelay import ServiceHealth
+
+
 async def publish_example(client):
     provider = await client.providers.create(
         name="Example Research",
@@ -73,6 +77,12 @@ async def publish_example(client):
         endpoint_url="https://provider.example/api/snapshot",
         protocols=("http",),
         version="1.0.0",
+        health=ServiceHealth(
+            endpoint="/health",
+            interval_seconds=30,
+            timeout_seconds=3,
+            failure_threshold=3,
+        ),
     )
     print(service.id, service.price_per_call)
 ```
@@ -128,6 +138,51 @@ same decision is safe; a different decision for an already decided request
 raises `ConflictError`. The API records the decision against the API key, so
 this SDK operation does not identify an individual dashboard user.
 
+## Read transaction history
+
+Use the `transactions:read` scope to list transaction summaries. The API
+supports filtering by agent, request state, payment state, and creation time.
+
+```python
+from datetime import UTC, datetime, timedelta
+
+async def recent_agent_transactions(client, agent_id):
+    return await client.transactions.list(
+        agent_id=agent_id,
+        created_after=datetime.now(UTC) - timedelta(days=7),
+        limit=25,
+    )
+```
+
+The route returns request, payment, and execution states with timestamps. It
+does not expose transaction creation or payment submission through this SDK.
+
+## Read spend analytics
+
+Use the `analytics:read` scope to read committed-spend totals or totals grouped
+by service capability. Both methods accept optional `start_date` and
+`end_date` values and default to the last 30 days when no range is provided.
+
+```python
+from datetime import UTC, datetime, timedelta
+
+async def review_spend(client):
+    start = datetime.now(UTC) - timedelta(days=30)
+    total = await client.analytics.spend(
+        period="monthly",
+        start_date=start,
+    )
+    by_capability = await client.analytics.capabilities(
+        start_date=start,
+        limit=10,
+    )
+    return total, by_capability
+```
+
+`spend()` returns one aggregate for the date range, with a `daily` or `monthly`
+period label. It does not return a time series. Amounts use the currency and
+decimal count returned by the API (currently USDX with six decimals).
+
 ## Handle API errors
 
 API errors include their HTTP status, machine-readable code, and request ID
@@ -157,6 +212,19 @@ async def list_agents_safely(client):
         print(exc.status_code, exc.code, exc.request_id)
 ```
 
+## Read receipt history
+
+Use the `receipts:read` scope to list execution receipt summaries. Results can
+be filtered by agent or tool-call ID.
+
+```python
+async def receipts_for_agent(client, agent_id):
+    return await client.receipts.list(agent_id=agent_id, limit=25)
+```
+
+This endpoint returns summary fields for review and pagination. It does not
+return the full canonical receipt payload required by `verify_receipt`.
+
 ## Receipt verification
 
 The SDK also exposes `fetch_receipt_keyring(url)` and `verify_receipt(receipt,
@@ -165,7 +233,8 @@ manifest format and verification limits.
 
 ## Current scope
 
-The client covers tenant-scoped agent, provider, service, policy, and approval
-operations. It does not yet implement transaction, gateway invocation, or
-payment methods. Create and use keys through the API's documented bootstrap
-and key-management processes.
+The client covers tenant-scoped agent, provider, service, policy, approval,
+receipt-history, transaction-history, and spend-analytics read operations. It
+does not yet implement transaction mutations, gateway invocation, or payment
+methods. Create and use keys through the API's documented bootstrap and
+key-management processes.

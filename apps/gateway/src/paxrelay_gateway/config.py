@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_MAINNET_PAXEER_RPC_URL = "https://public-rpc.paxeer.app/rpc"
+
 
 class GatewaySettings(BaseSettings):
     """Environment-driven settings for the 402LXP gateway."""
@@ -88,8 +90,11 @@ class GatewaySettings(BaseSettings):
 
     # Paxeer adapter selection
     use_mock_adapter: bool = True
-    paxeer_chain_id: int = 125
-    paxeer_rpc_url: str = "https://public-rpc.paxeer.app/rpc"
+    paxeer_network_environment: Literal[
+        "mainnet", "testnet", "staging"
+    ] = "mainnet"
+    paxeer_chain_id: int = Field(default=125, ge=1)
+    paxeer_rpc_url: str = _MAINNET_PAXEER_RPC_URL
     layerx_api_url: str = ""
 
     # 402LXP
@@ -120,16 +125,40 @@ class GatewaySettings(BaseSettings):
 
     @model_validator(mode="after")
     def require_production_integrations(self) -> "GatewaySettings":
-        """Reject mock payments and development signing defaults in production."""
-        if self.app_env == "production":
+        """Require explicit staging endpoints and production integrations."""
+        if self.app_env in {"staging", "production"}:
             if not self.provider_endpoint_hosts:
                 raise ValueError(
-                    "PROVIDER_ENDPOINT_HOST_ALLOWLIST is required in production"
+                    "PROVIDER_ENDPOINT_HOST_ALLOWLIST is required in staging "
+                    "and production"
+                )
+            if self.use_mock_adapter:
+                raise ValueError(
+                    "USE_MOCK_ADAPTER must be false in staging and production"
+                )
+        if (
+            self.app_env == "staging"
+            and self.paxeer_network_environment == "mainnet"
+        ):
+            raise ValueError(
+                "PAXEER_NETWORK_ENVIRONMENT must not be mainnet in staging"
+            )
+        if self.app_env == "staging":
+            if not _is_secure_url(self.layerx_api_url):
+                raise ValueError("LAYERX_API_URL must be an HTTPS URL in staging")
+            if not _is_secure_url(self.paxeer_rpc_url):
+                raise ValueError("PAXEER_RPC_URL must be an HTTPS URL in staging")
+            if self.paxeer_rpc_url.rstrip("/") == _MAINNET_PAXEER_RPC_URL:
+                raise ValueError(
+                    "PAXEER_RPC_URL must point to the staging network in staging"
+                )
+        if self.app_env == "production":
+            if self.paxeer_network_environment != "mainnet":
+                raise ValueError(
+                    "PAXEER_NETWORK_ENVIRONMENT must be mainnet in production"
                 )
             if self.gateway_rate_limit_enabled is False:
                 raise ValueError("Gateway rate limiting cannot be disabled in production")
-            if self.use_mock_adapter:
-                raise ValueError("USE_MOCK_ADAPTER must be false in production")
             if self.receipt_signing_backend != "local":
                 raise ValueError(
                     "RECEIPT_SIGNING_BACKEND must be 'local'; other backends are not implemented"

@@ -149,8 +149,11 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 | `GET /services/{service_id}` | Get one service. |
 
 Service create bodies contain `name`, `slug`, `capability`, `protocols`,
-`price_per_call`, `base_url`, `endpoint_url`, `version`, and an optional
-`description`. Capabilities use lowercase dot-separated names such as
+`price_per_call`, `base_url`, `endpoint_url`, `version`, and optional
+`description` and `health` settings. Health settings use a path on the same
+host as `base_url`, a check interval, request timeout, and consecutive failure
+threshold; defaults are `/health`, 30 seconds, 5 seconds, and 3 failures.
+Capabilities use lowercase dot-separated names such as
 `research.web-search`; a trailing `.*` wildcard is accepted by validation.
 The gateway sends requests to `endpoint_url`. In staging and production, this
 URL must use HTTPS and resolve only to public IP addresses in staging and

@@ -8,7 +8,7 @@ Two layers, both must pass:
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from paxrelay_domain import Quote
@@ -65,7 +65,8 @@ async def verify_payment_proof(
         expected_recipient=quote.recipient_address,
         expected_nonce=quote.nonce,
         expires_at=quote.expires_at,
-        now=datetime.utcnow(),
+        now=datetime.now(UTC).replace(tzinfo=None),
+        expected_chain_id=quote.chain_id,
     )
     if not ok:
         raise VerificationError(reason)

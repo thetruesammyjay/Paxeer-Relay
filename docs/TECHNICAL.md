@@ -14,8 +14,8 @@ which parts are present in the current checkout.
 - [API reference](api-reference.md) — control-plane, gateway, and simulator
   routes, inputs, outputs, and current limitations.
 - [Python SDK guide](../packages/sdk-python/README.md) — connect to the API and
-  manage tenant agents, providers, services, spend policies, and approvals
-  from Python.
+  manage tenant agents, providers, services, spend policies, approvals,
+  analytics, receipt history, and transaction history from Python.
 - [Architecture](architecture.md) — application roles, data flow, and trust
   boundaries.
 - [Operations](operations.md) — health checks, worker status, payment failures,
@@ -71,5 +71,7 @@ approvals, fans supported outbox events into durable delivery rows, and sends
 HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation
 checks local payment facts and reads LayerX/Paxeer adapter evidence, but the
 external settlement endpoint contract still needs validation with the network
-operator. Provider health, analytics, and indexing remain placeholders. Do not
-use mock output as evidence of a real payment or settlement.
+operator. Provider health probes and rolling provider metrics are implemented;
+the analytics materializer remains a placeholder. Analytics API routes provide
+tenant-scoped spend and capability aggregates. Do not use mock output as evidence
+of a real payment or settlement.

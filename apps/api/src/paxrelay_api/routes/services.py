@@ -52,6 +52,12 @@ def _service_out(s: Service) -> ServiceOut:
             if price
             else None
         ),
+        health={
+            "endpoint": s.health.endpoint,
+            "interval_seconds": s.health.interval_seconds,
+            "timeout_seconds": s.health.timeout_seconds,
+            "failure_threshold": s.health.failure_threshold,
+        },
         description=s.description,
     )
 
@@ -93,7 +99,7 @@ async def publish_service(
             }
         ),
         delivery=ServiceDelivery(),
-        health=ServiceHealth(),
+        health=ServiceHealth(**body.health.model_dump()),
         base_url=body.base_url,
         description=body.description,
     )

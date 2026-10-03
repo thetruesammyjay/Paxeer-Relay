@@ -33,7 +33,9 @@ class AsyncPaxRelayClient:
     The API key must have the scopes required by the operation. For example,
     creating an agent requires ``agents:write`` and listing agents requires
     ``agents:read``. Reading approvals requires ``approvals:read`` and recording
-    decisions requires ``approvals:write``.
+    decisions requires ``approvals:write``. Reading transaction history requires
+    ``transactions:read``. Listing receipt summaries requires ``receipts:read``;
+    reading spend analytics requires ``analytics:read``.
     """
 
     def __init__(
@@ -61,16 +63,22 @@ class AsyncPaxRelayClient:
         )
 
         from paxrelay.agents import AgentsResource
+        from paxrelay.analytics import AnalyticsResource
         from paxrelay.approvals import ApprovalsResource
         from paxrelay.policies import PoliciesResource
         from paxrelay.providers import ProvidersResource
+        from paxrelay.receipts import ReceiptsResource
         from paxrelay.services import ServicesResource
+        from paxrelay.transactions import TransactionsResource
 
         self.agents = AgentsResource(self)
+        self.analytics = AnalyticsResource(self)
         self.approvals = ApprovalsResource(self)
         self.policies = PoliciesResource(self)
         self.providers = ProvidersResource(self)
+        self.receipts = ReceiptsResource(self)
         self.services = ServicesResource(self)
+        self.transactions = TransactionsResource(self)
 
     async def _request(
         self,
