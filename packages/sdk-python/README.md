@@ -154,8 +154,50 @@ async def recent_agent_transactions(client, agent_id):
     )
 ```
 
-The route returns request, payment, and execution states with timestamps. It
-does not expose transaction creation or payment submission through this SDK.
+The route returns request, payment, and execution states with timestamps. The
+control-plane client does not create transactions; paid invocation and proof
+submission use the separate gateway client described below.
+
+## Invoke a paid service through the gateway
+
+The gateway client starts an invocation and returns the 402LXP payment
+requirement. Your application or wallet integration handles the payment and
+passes the resulting proof back to PaxRelay. The SDK does not hold wallet keys,
+sign transfers, or initiate payments. Use a key with the `gateway:invoke`
+scope and an agent ID that belongs to the key's tenant.
+
+```python
+from paxrelay import (
+    AsyncPaxRelayGatewayClient,
+    GatewayCallResult,
+    PaymentChallenge,
+)
+
+async def call_paid_service(api_key, agent_id, wallet):
+    async with AsyncPaxRelayGatewayClient(
+        base_url="http://localhost:8080",
+        api_key=api_key,
+        agent_id=agent_id,
+    ) as gateway:
+        started = await gateway.invoke(
+            capability="research.web-search",
+            idempotency_key="search-2026-10-03-001",
+            arguments={"query": "Paxeer Network"},
+        )
+
+        if isinstance(started, PaymentChallenge):
+            proof = await wallet.create_payment_proof(started.payment_requirement)
+            return await gateway.submit_proof(started.tool_call_id, proof=proof)
+        if isinstance(started, GatewayCallResult):
+            return started  # An idempotent replay of a completed call.
+        return started  # Policy requires human approval.
+```
+
+`invoke()` can return a `PaymentChallenge`, a completed `GatewayCallResult` for
+an idempotent replay, or `ApprovalPending`. `submit_proof()` returns the
+provider result and signed receipt. Verification failures, expired quotes,
+policy denials, and gateway errors raise the corresponding SDK API exception.
+The client does not automatically retry requests or submit payment proofs.
 
 ## Read spend analytics
 

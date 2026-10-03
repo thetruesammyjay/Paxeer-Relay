@@ -66,7 +66,10 @@ pnpm dev
 ```
 
 The web console is still a prototype and most views use sample data. The
-simulator returns fabricated network results. The worker expires overdue policy
+analytics and transaction pages are connected to their read-only API endpoints
+when keys with `analytics:read` or `transactions:read` scope are supplied.
+Keys stay in page memory and are not written to browser storage. The simulator
+returns fabricated network results. The worker expires overdue policy
 approvals, fans supported outbox events into durable delivery rows, and sends
 HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation
 checks local payment facts and reads LayerX/Paxeer adapter evidence, but the

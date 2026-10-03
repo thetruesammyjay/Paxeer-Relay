@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ResourcePage } from "@/components/resource-page";
+import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 export const metadata: Metadata = { title: "Analytics" };
 export default function Page() {
-  return <ResourcePage kind="analytics" />;
+  return <AnalyticsDashboard />;
 }

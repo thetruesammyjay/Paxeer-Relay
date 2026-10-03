@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -194,3 +195,46 @@ class AnalyticsCapability(APIModel):
     currency: str
     decimals: int
     call_count: int
+
+
+class PaymentRequirement(APIModel):
+    """The immutable payment quote returned by the gateway."""
+
+    version: str
+    payment_scheme: Literal["402LXP"]
+    network: str
+    chain_id: int
+    settlement_layer: str
+    currency: str
+    currency_decimals: int = 6
+    amount_atomic: str
+    recipient: str
+    quote_id: UUID
+    request_hash: str
+    expires_at: datetime
+    nonce: str
+
+
+class PaymentChallenge(APIModel):
+    """A gateway response that requires payment proof before execution."""
+
+    tool_call_id: UUID
+    payment_requirement: PaymentRequirement
+
+
+class GatewayCallResult(APIModel):
+    """Provider output and signed receipt returned after successful execution."""
+
+    result: Any
+    receipt: dict[str, Any]
+    replayed: bool = False
+
+
+class ApprovalPending(APIModel):
+    """A gateway response waiting for a human policy approval."""
+
+    decision: str
+    explanation: str
+    approval_id: UUID
+    status: str
+    expires_at: datetime

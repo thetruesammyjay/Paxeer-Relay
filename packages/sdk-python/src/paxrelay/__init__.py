@@ -3,6 +3,7 @@
 from paxrelay.approvals import ApprovalDecision, ApprovalStatus
 from paxrelay.analytics import AnalyticsPeriod
 from paxrelay.client import AsyncPaxRelayClient
+from paxrelay.payments import AsyncPaxRelayGatewayClient, GatewayStartResult
 from paxrelay.exceptions import (
     APIValidationError,
     AuthenticationError,
@@ -18,10 +19,14 @@ from paxrelay.exceptions import (
 from paxrelay.models import (
     Agent,
     AgentWallet,
+    ApprovalPending,
     AnalyticsCapability,
     AnalyticsSpend,
     ApprovalRequest,
+    GatewayCallResult,
     Money,
+    PaymentChallenge,
+    PaymentRequirement,
     Policy,
     PolicyAssignment,
     Provider,
@@ -45,17 +50,23 @@ __all__ = [
     "AnalyticsCapability",
     "AnalyticsPeriod",
     "AnalyticsSpend",
+    "ApprovalPending",
     "ApprovalDecision",
     "ApprovalRequest",
     "ApprovalStatus",
     "AsyncPaxRelayClient",
+    "AsyncPaxRelayGatewayClient",
     "AuthenticationError",
     "ConflictError",
+    "GatewayCallResult",
+    "GatewayStartResult",
     "Money",
     "PaxRelayAPIError",
     "PaxRelayConnectionError",
     "PaxRelayError",
     "PaxRelayProtocolError",
+    "PaymentChallenge",
+    "PaymentRequirement",
     "PermissionDeniedError",
     "Policy",
     "PolicyAssignment",

@@ -96,6 +96,13 @@ shell and imports the global stylesheet.
 `app/admin/settlements/page.tsx` composes `components/settlement-review.tsx`.
 The page uses `hooks/use-settlement-reconciliation.ts` for typed requests and
 cursor state; the hook calls the FastAPI route through `lib/api-client.ts`.
+`app/analytics/page.tsx` composes `components/analytics-dashboard.tsx`, which
+uses `hooks/use-analytics.ts` to read the current project's spend and
+capability totals from FastAPI.
+`app/transactions/page.tsx` composes `components/transaction-activity.tsx` and
+uses `hooks/use-transactions.ts` to show recent request, payment, and execution
+states. Both read-only pages use `components/scoped-api-key-access.tsx` to keep
+scoped keys in page memory.
 
 ## Route map
 
@@ -113,11 +120,11 @@ cursor state; the hook calls the FastAPI route through `lib/api-client.ts`.
 | `/agents` | `app/agents/page.tsx` | PaxRelay agent inventory presentation. |
 | `/policies` | `app/policies/page.tsx` | PaxRelay spending policy presentation. |
 | `/approvals` | `app/approvals/page.tsx` | Approval queue presentation; no persisted approval workflow is connected. |
-| `/transactions` | `app/transactions/page.tsx` | Request and payment activity presentation. |
+| `/transactions` | `app/transactions/page.tsx` | Reads up to 100 recent request records with request/payment state filters and a `transactions:read` key. |
 | `/providers` | `app/providers/page.tsx` | PaxRelay provider inventory and configuration. |
 | `/services` | `app/services/page.tsx` | PaxRelay service inventory. |
 | `/receipts` | `app/receipts/page.tsx` | PaxRelay execution receipt presentation. |
-| `/analytics` | `app/analytics/page.tsx` | Spend and capability analytics presentation. |
+| `/analytics` | `app/analytics/page.tsx` | Reads the last 30 days of spend and capability totals from the API with an `analytics:read` key. |
 | `/settings` | `app/settings/page.tsx` | PaxRelay workspace settings presentation. |
 | `/api/health` | `app/api/health/route.ts` | Next.js process health. It does not check FastAPI or the database. |
 
@@ -196,16 +203,14 @@ existing PaxRelay resource views. Keep shared behavior here and use
 
 `lib/api-client.ts` is the browser's typed HTTP boundary. It accepts a bearer
 token from its caller and unwraps the API error envelope. Hooks such as
-`hooks/use-agents.ts` and `hooks/use-settlement-reconciliation.ts` own query
-keys, request state, and API response types. Pages should use the hooks instead
-of duplicating `fetch` calls. The settlement review key is held only in React
-state, never in browser storage; disconnecting removes its query-cache entries.
-
-The API client is not connected to every screen. The current admin and creator
-overviews are sample data, and most PaxRelay dashboard screens also use sample
-data. Settlement review is live when a valid scoped key is supplied. The
-network adapter paths and response contracts still require operator
-confirmation before the data can be treated as production settlement evidence.
+`hooks/use-analytics.ts`, `hooks/use-transactions.ts`, and
+`hooks/use-settlement-reconciliation.ts` own request state and API response
+types. Analytics, transactions, and settlement review keep their keys in React
+state, never browser storage. The API client is not connected to every screen:
+the admin and creator overviews and most other dashboard pages still show
+sample data. The network adapter paths and response contracts still require
+operator confirmation before the data can be treated as production settlement
+evidence.
 
 ```text
 Route page

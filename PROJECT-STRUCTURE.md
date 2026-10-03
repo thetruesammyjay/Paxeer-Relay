@@ -10,10 +10,10 @@ The repository is in pre-alpha and in an active refactor.
 
 - The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, public receipt-key distribution, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, and PostgreSQL readiness reporting. The gateway and dashboard still have production security gaps.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
-- The web console is a visual prototype. Its resource pages and dashboard use sample data; the API client and agent hook are not yet connected to those pages.
+- The web console is a visual prototype. Its analytics and transaction pages now read tenant-scoped data from the API using `analytics:read` and `transactions:read` keys. The organisation, admin, creator, and remaining resource pages still show sample data; their workflows are not connected to the API.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
 - The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, probes configured provider health paths, indexes recent execution metrics, rebuilds recent hourly and daily tenant spend rollups, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation. Analytics API queries use fresh daily rollups for complete days and source payments for partial days or whenever the rollup refresh is stale or unavailable.
-- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK now supports tenant-scoped agent, provider, service, policy, approval, receipt-history, transaction-history, and spend-analytics operations plus local receipt verification and public-key manifest retrieval; transaction mutations, payment, and gateway client methods remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
+- Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK supports tenant-scoped agent, provider, service, policy, approval, receipt-history, transaction-history, and spend-analytics operations; local receipt verification; public-key manifest retrieval; and a gateway client for requesting a quote and submitting caller-produced payment proof. Transaction mutations, wallet signing, and payment initiation remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
 - The technical references in `docs/` now describe the routes and flows in source, and call out incomplete or simulated behavior. Read [docs/TECHNICAL.md](docs/TECHNICAL.md) for local setup and the documentation index.
 
 The specification below preserves the technical design that was previously in README.md. Treat feature descriptions as product intent unless the corresponding implementation exists in the current source tree.
@@ -1195,14 +1195,13 @@ Provider and agent integrations for TypeScript MCP applications.
 
 ### `packages/sdk-python`
 
-Provides an async control-plane client for registering and looking up agents and providers, publishing services, creating and assigning spend policies, reviewing approval requests, reading receipt and transaction history, reading spend analytics, and reading agent wallets. It also supports local receipt verification and fetching the public receipt-key manifest. Receipt listing returns summaries; transaction mutations, payment, and Gateway client methods remain unimplemented.
+Provides async control-plane and gateway clients. The control-plane client registers and looks up agents and providers, publishes services, creates and assigns spend policies, reviews approval requests, and reads receipt/transaction history and spend analytics. The gateway client starts paid service calls and submits proof supplied by the caller. The SDK also supports local receipt verification and fetching the public receipt-key manifest. Receipt listing returns summaries; transaction mutations, wallet signing, and payment initiation remain unimplemented.
 
 The package source includes `client.py` for HTTP transport, `agents.py`,
 `approvals.py`, `analytics.py`, `providers.py`, `receipts.py`, `services.py`,
-`policies.py`, and `transactions.py` for resource operations; `receipts.py`
-also provides receipt verification helpers. `models.py` contains typed
+`policies.py`, `transactions.py`, and `payments.py` for gateway operations;
+`receipts.py` also provides receipt verification helpers. `models.py` contains typed
 responses, and `exceptions.py` contains API and transport failures.
-`payments.py` remains a placeholder.
 
 ### `packages/sdk-typescript`
 

@@ -50,7 +50,7 @@ A successful payment does not guarantee that a service delivered a successful re
 
 ## Current status
 
-PaxRelay is pre-alpha. The repository contains early code for coordinating requests and payments, a dashboard preview, and a local practice simulator. The dashboard shows sample information, the simulator invents payment results, and background operations are unfinished.
+PaxRelay is pre-alpha. The repository contains early code for coordinating requests and payments, a dashboard preview, and a local practice simulator. Most dashboard areas still show sample information; the analytics and transaction pages can read workspace data with read-only access keys. The simulator uses made-up payment results, and external payment-network integration still needs validation.
 
 Parts of the project are being reorganized. This checkout is not yet ready to run as one complete product. Developers can find local setup and detailed implementation notes in the [technical documentation](docs/TECHNICAL.md).
 

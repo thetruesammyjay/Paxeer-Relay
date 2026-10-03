@@ -4,14 +4,12 @@ import { useMemo, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
 export type ResourceKind =
-  | "transactions"
   | "approvals"
   | "agents"
   | "policies"
   | "providers"
   | "services"
   | "receipts"
-  | "analytics"
   | "settings";
 type Config = {
   eyebrow: string;
@@ -23,56 +21,6 @@ type Config = {
   rows: string[][];
 };
 const CONFIG: Record<ResourceKind, Config> = {
-  transactions: {
-    eyebrow: "Execution ledger",
-    title: "Transactions",
-    description: "Every agent call from request through payment and delivery.",
-    action: "Export ledger",
-    icon: "transactions",
-    columns: ["Transaction", "Agent", "Service", "Amount", "Latency", "Status"],
-    rows: [
-      [
-        "txn_8V4…K2",
-        "Research Runner",
-        "Atlas Search API",
-        "0.024 USDX",
-        "247 ms",
-        "Settled",
-      ],
-      [
-        "txn_2M9…Q8",
-        "Treasury Scout",
-        "Paxeer Price Oracle",
-        "0.008 USDX",
-        "91 ms",
-        "Verified",
-      ],
-      [
-        "txn_7H1…F4",
-        "Support Triage",
-        "Vector Cloud",
-        "0.012 USDX",
-        "312 ms",
-        "Routing",
-      ],
-      [
-        "txn_4C6…P1",
-        "Research Runner",
-        "Model Forge",
-        "0.190 USDX",
-        "—",
-        "Review",
-      ],
-      [
-        "txn_1A3…D7",
-        "Treasury Scout",
-        "ChainScope RPC",
-        "0.006 USDX",
-        "118 ms",
-        "Settled",
-      ],
-    ],
-  },
   approvals: {
     eyebrow: "Human authority",
     title: "Approvals",
@@ -279,21 +227,6 @@ const CONFIG: Record<ResourceKind, Config> = {
       ],
     ],
   },
-  analytics: {
-    eyebrow: "Operational intelligence",
-    title: "Analytics",
-    description:
-      "Understand cost, quality, and policy outcomes without losing the underlying evidence.",
-    action: "Download report",
-    icon: "analytics",
-    columns: ["Provider", "Calls", "Spend", "Success", "p95", "Change"],
-    rows: [
-      ["Atlas Labs", "8,240", "$183.42", "99.99%", "310 ms", "+12.4%"],
-      ["Paxeer Oracle", "4,102", "$32.81", "99.97%", "94 ms", "+8.1%"],
-      ["Vector Cloud", "3,048", "$36.58", "99.82%", "420 ms", "−2.6%"],
-      ["Model Forge", "1,486", "$282.34", "99.91%", "1.4 s", "+21.0%"],
-    ],
-  },
   settings: {
     eyebrow: "Workspace controls",
     title: "Settings",
@@ -351,7 +284,6 @@ const statusTone = (value: string) => {
 
 export function ResourcePage({ kind }: { kind: ResourceKind }) {
   const config = CONFIG[kind];
-  const isAnalytics = kind === "analytics";
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const rows = useMemo(
@@ -388,36 +320,6 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
           this page are not connected to the API.
         </p>
       </div>
-      {isAnalytics ? (
-        <div className="grid metrics" style={{ marginBottom: 14 }}>
-          {[
-            ["Total spend", "$537.15", "+11.2%"],
-            ["Paid calls", "16,876", "+8.4%"],
-            ["Policy blocks", "142", "−4.1%"],
-            ["Median cost", "0.018 USDX", "−1.8%"],
-          ].map(([label, value, delta], i) => (
-            <div
-              className="card metric"
-              key={label}
-              style={
-                {
-                  "--metric-color":
-                    i === 0 ? "var(--relay)" : "var(--line-strong)",
-                } as React.CSSProperties
-              }
-            >
-              <div className="metric-label">
-                {label}
-                <span className="mono">30D</span>
-              </div>
-              <div className="metric-value">{value}</div>
-              <div className="metric-foot">
-                <strong>{delta}</strong> over prior period
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
       <div className="toolbar">
         <input
           className="search"
@@ -477,7 +379,7 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
                             {cell}
                           </span>
                         ) : cellIndex === 1 &&
-                          ["agents", "transactions", "approvals"].includes(
+                          ["agents", "approvals"].includes(
                             kind,
                           ) ? (
                           <div className="agent-cell">
