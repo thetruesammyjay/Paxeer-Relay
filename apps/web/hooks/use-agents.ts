@@ -7,15 +7,26 @@ export interface Agent {
   id: string;
   name: string;
   slug: string;
+  environment: string;
   status: string;
   wallet_address: string | null;
+  description: string | null;
   created_at: string;
 }
 
-/** Fetch the list of agents for the current tenant. */
-export function useAgents(token?: string) {
+/** Fetch the latest agents for the tenant represented by this key session. */
+export function useAgents(token: string, connectionId: string) {
   return useQuery({
-    queryKey: ["agents"],
-    queryFn: () => apiFetch<Agent[]>("/v1/agents", { token }),
+    queryKey: ["agents", connectionId],
+    queryFn: ({ signal }) =>
+      apiFetch<Agent[]>("/v1/agents?limit=100", {
+        token,
+        signal,
+        cache: "no-store",
+      }),
+    enabled: Boolean(token && connectionId),
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }

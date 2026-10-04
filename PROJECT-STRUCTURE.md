@@ -10,7 +10,7 @@ The repository is in pre-alpha and in an active refactor.
 
 - The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, public receipt-key distribution, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, and PostgreSQL readiness reporting. The gateway and dashboard still have production security gaps.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
-- The web console is a visual prototype. Its analytics and transaction pages now read tenant-scoped data from the API using `analytics:read` and `transactions:read` keys. The organisation, admin, creator, and remaining resource pages still show sample data; their workflows are not connected to the API.
+- The web console is a visual prototype. Its agent, policy, provider, service, receipt, analytics, and transaction pages read tenant-scoped data from the API using `agents:read`, `policies:read`, `providers:read`, `services:read`, `receipts:read`, `analytics:read`, and `transactions:read` keys. The provider list does not include live health or performance data. The service list shows registered service details, exact prices, and configured health-probe settings; it does not include the latest probe result. The receipt list displays recent summaries, exact atomic-unit payment amounts, and signature metadata; the page does not verify signatures. Its approval page reads requests with `approvals:read` and submits confirmed decisions with `approvals:write`. Approval allows a request to continue to payment checks but does not submit payment. The policy list returns summaries only, without rule details or agent assignments. The organisation, admin, creator, and remaining resource pages still show sample data; their workflows are not connected to the API.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
 - The worker expires overdue policy approvals, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, probes configured provider health paths, indexes recent execution metrics, rebuilds recent hourly and daily tenant spend rollups, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation. Analytics API queries use fresh daily rollups for complete days and source payments for partial days or whenever the rollup refresh is stale or unavailable.
 - Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK supports tenant-scoped agent, provider, service, policy, approval, receipt-history, transaction-history, and spend-analytics operations; local receipt verification; public-key manifest retrieval; and a gateway client for requesting a quote and submitting caller-produced payment proof. Transaction mutations, wallet signing, and payment initiation remain unimplemented. The Python MCP modules remain placeholders. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
@@ -2148,11 +2148,10 @@ https://gateway.paxrelay.dev/v1
 
 ### Approvals
 
-| Method | Endpoint                  | Description            |
-| ------ | ------------------------- | ---------------------- |
-| `GET`  | `/approvals`              | List approval requests |
-| `POST` | `/approvals/{id}/approve` | Approve a request      |
-| `POST` | `/approvals/{id}/reject`  | Reject a request       |
+| Method | Endpoint                   | Description                 |
+| ------ | -------------------------- | --------------------------- |
+| `GET`  | `/approvals`               | List approval requests      |
+| `POST` | `/approvals/{id}/decision` | Approve or reject a request |
 
 ### Webhooks
 

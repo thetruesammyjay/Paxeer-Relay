@@ -66,9 +66,21 @@ pnpm dev
 ```
 
 The web console is still a prototype and most views use sample data. The
-analytics and transaction pages are connected to their read-only API endpoints
-when keys with `analytics:read` or `transactions:read` scope are supplied.
-Keys stay in page memory and are not written to browser storage. The simulator
+agents, policies, providers, services, receipts, analytics, and transaction
+pages are connected to their API endpoints when keys with `agents:read`,
+`policies:read`, `providers:read`, `services:read`, `receipts:read`,
+`analytics:read`, or `transactions:read` scope are supplied.
+The approvals page reads with
+`approvals:read` and records decisions with `approvals:write`. Keys stay in
+page memory and are not written to browser storage. The policy list API returns
+a summary and does not expose rule details or agent assignments. Approval
+allows a request to continue to payment checks; it does not submit a payment.
+The services page lists up to 100 recent records and shows configured probe
+settings; the services endpoint does not provide the latest probe result.
+The receipts page lists up to 100 recent tenant-scoped summaries and displays
+the signature and hash fields returned by the API. It does not verify receipt
+signatures. Receipt payment amounts are kept as exact atomic-unit integers.
+The simulator
 returns fabricated network results. The worker expires overdue policy
 approvals, fans supported outbox events into durable delivery rows, and sends
 HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation

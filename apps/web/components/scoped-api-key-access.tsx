@@ -6,6 +6,7 @@ import { ShieldCheckIcon } from "@hugeicons/core-free-icons";
 
 interface ScopedApiKeyAccessProps {
   scope: string;
+  additionalScopes?: string[];
   title?: string;
   actionLabel: string;
   apiKey: string;
@@ -18,6 +19,7 @@ interface ScopedApiKeyAccessProps {
 
 export function ScopedApiKeyAccess({
   scope,
+  additionalScopes = [],
   title = "Connect to your workspace",
   actionLabel,
   apiKey,
@@ -28,6 +30,7 @@ export function ScopedApiKeyAccess({
   onDisconnect,
 }: ScopedApiKeyAccessProps) {
   const [draftKey, setDraftKey] = useState("");
+  const requiredScopes = [scope, ...additionalScopes];
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,8 +54,15 @@ export function ScopedApiKeyAccess({
         <div>
           <h2 id="scoped-key-title">{title}</h2>
           <p>
-            Enter an API key with <code>{scope}</code> access. The key stays in
-            this page&apos;s memory and is cleared when you leave or change it.
+            Enter an API key with{" "}
+            {requiredScopes.map((requiredScope, index) => (
+              <span key={requiredScope}>
+                {index > 0 ? " and " : null}
+                <code>{requiredScope}</code>
+              </span>
+            ))}{" "}
+            access. The key stays in this page&apos;s memory and is cleared when
+            you leave or change it.
           </p>
         </div>
       </div>
@@ -70,7 +80,12 @@ export function ScopedApiKeyAccess({
                   ? "Checking API key"
                   : "Waiting for API"}
           </span>
-          <button className="button ghost" type="button" onClick={onDisconnect}>
+          <button
+            className="button ghost"
+            type="button"
+            onClick={onDisconnect}
+            disabled={loading}
+          >
             Change key
           </button>
         </div>
@@ -83,7 +98,7 @@ export function ScopedApiKeyAccess({
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
-              placeholder={`Paste a key with ${scope} access`}
+              placeholder={`Paste a key with ${requiredScopes.join(" and ")} access`}
               value={draftKey}
               onChange={(event) => setDraftKey(event.target.value)}
               aria-label="Workspace API key"

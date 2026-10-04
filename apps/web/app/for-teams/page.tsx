@@ -81,8 +81,9 @@ export default function ForTeamsPage() {
             <p className="landing-eyebrow">PRE-ALPHA DASHBOARD</p>
             <h2>See the operator view.</h2>
             <p>
-              The current workspace is a visual preview with sample agents,
-              policies, and activity. It does not yet save dashboard actions.
+              The overview still uses sample policies and activity. The Agents
+              page can show your registered agents with a read-only workspace
+              key; dashboard actions are not connected yet.
             </p>
           </div>
           <Link className="landing-button landing-button-ember" href="/dashboard">

@@ -56,6 +56,9 @@ within that authenticated tenant; it does not authenticate the caller.
 
 Monetary values use atomic integer units. USDX has six decimals, so
 `1000000` means `1 USDX`.
+Clients must preserve `amount_atomic` as an exact integer. JavaScript clients
+should not convert it to a floating-point value before formatting or comparing
+amounts.
 
 ```json
 {
@@ -277,6 +280,12 @@ project, the key request is:
 | `GET /receipt-keys` | Public version 1 manifest of receipt verification keys. |
 | `GET /analytics/spend` | One spend aggregate for `period=daily` or `period=monthly` and an optional `start_date` / `end_date` range. |
 | `GET /analytics/capabilities` | Spend grouped by capability with optional dates and `limit` (1–100, default 20). |
+
+`GET /receipts` requires `receipts:read` and scopes results through the
+tenant-owned tool call. It returns receipt summaries, not the complete
+canonical receipt. `payment_amount` is an integer in atomic currency units;
+receipt hash, signature, and signing-key fields can be absent. Listing records
+does not verify their signatures.
 
 Analytics defaults to the previous 30 days. `start_date` must precede
 `end_date`. Spend counts payment states `verified`, `settled_layerx`, and

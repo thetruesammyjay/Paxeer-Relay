@@ -114,7 +114,7 @@ Use graphic artwork rather than stock photography, 3D renders, or crypto decorat
 
 ## Voice
 
-Write from the operator's point of view. Use short, active labels such as Add agent, Review request, Verify receipt, and Save changes. Say what happened and what the person can do next. Explain a technical term when it first appears.
+Write from the operator's point of view. Use short, active labels such as Add agent, Review request, Review receipt, and Save changes. Say what happened and what the person can do next. Explain a technical term when it first appears.
 
 ## Dashboard workspaces
 
@@ -197,6 +197,11 @@ existing routes and navigation groups:
 | Evidence | Receipts, Analytics | Inspect outcomes and spending records |
 | Workspace | Settings | Review workspace configuration |
 
+The current Receipts page reads up to 100 tenant-scoped summaries with a
+`receipts:read` key. Keep payment amounts in exact atomic units and show hashes
+and signature metadata as returned by the API. The page does not verify the
+signature, so avoid verified or trusted labels unless verification is added.
+
 Keep the page order: title and workspace context; relay, settlement, success,
 and attention metrics; a request lifecycle; recent transactions; approval
 requests; then spend trend and operational activity. Every metric includes its
@@ -204,9 +209,10 @@ period or scope. Show the agent, requested service, amount, governing rule,
 current limit, and expiry before an approval decision.
 
 Approval actions must be explicit (`Approve once`, `Deny`, or the equivalent
-supported action). The current API only exposes policy evaluation and approval
-presentation is still a prototype; do not imply that an approval has been
-persisted unless a backend action confirms it.
+supported action). The current API provides a tenant-scoped approval queue and
+a decision endpoint. Show a decision as persisted only after that endpoint
+confirms it. The API attributes a decision to the API key, not to an individual
+dashboard user, so do not show a named reviewer unless user identity is added.
 
 ### Admin dashboard
 
@@ -294,7 +300,7 @@ provider-scoped authentication, and live creator data are not connected yet.
 | Workspace shell and navigation | `apps/web/components/app-shell.tsx` | PaxRelay, platform admin, and creator shells; responsive navigation and More sheet |
 | Overview and operations pages | `apps/web/app/dashboard/`, `agents/`, `policies/`, `approvals/`, `transactions/` | Current operator experience |
 | Network pages | `apps/web/app/providers/`, `services/` | Provider and service administration |
-| Evidence pages | `apps/web/app/receipts/`, `analytics/` | Current records and reporting |
+| Evidence pages | `apps/web/app/receipts/`, `analytics/` | Live tenant receipt summaries and analytics |
 | Shared page and state components | `apps/web/components/` | Reusable presentation pieces |
 | API boundary and query hooks | `apps/web/lib/`, `apps/web/hooks/` | Typed HTTP access; not yet wired to every screen |
 | Admin and creator overview pages | `apps/web/app/admin/page.tsx`, `apps/web/app/creator/page.tsx` | Current visual previews using sample data |

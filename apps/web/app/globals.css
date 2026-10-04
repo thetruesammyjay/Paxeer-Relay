@@ -1246,6 +1246,90 @@ img {
   min-width: 500px;
 }
 
+.agent-directory-table {
+  min-width: 820px;
+}
+
+.policy-directory-table {
+  min-width: 720px;
+}
+
+.provider-directory-table {
+  min-width: 900px;
+}
+
+.service-directory-table {
+  min-width: 1020px;
+}
+
+.receipt-directory-table {
+  min-width: 1120px;
+}
+
+.receipt-evidence {
+  max-width: 190px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+}
+
+.receipt-evidence summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.receipt-evidence dl {
+  display: grid;
+  gap: 8px;
+  min-width: min(480px, 78vw);
+  margin: 10px 0;
+  white-space: normal;
+}
+
+.receipt-evidence dl > div {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.receipt-evidence dt {
+  color: var(--muted);
+}
+
+.receipt-evidence dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.receipt-evidence > p {
+  max-width: 460px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.service-capability {
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+  white-space: nowrap;
+}
+
+.service-protocols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.service-probe {
+  min-width: 110px;
+}
+
 .mono {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.9em;
@@ -1319,10 +1403,34 @@ img {
   background: var(--sulfur);
 }
 
+.approval-queue {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.approval-queue .approval-card {
+  margin: 0;
+  padding: 21px;
+  border-radius: 24px;
+}
+
 .approval-top {
   display: flex;
   align-items: flex-start;
   gap: 13px;
+}
+
+.approval-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.approval-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .approval-mark {
@@ -1344,11 +1452,42 @@ img {
   font-size: 15px;
 }
 
+.approval-title-row .status {
+  flex: 0 0 auto;
+}
+
 .approval p {
   margin: 5px 0 0;
   color: var(--ink-2);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.approval-id,
+.approval-reference-row {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.approval-id {
+  display: block;
+  margin-top: 8px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.approval-reference-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+}
+
+.approval-reference-row code {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .approval-facts {
@@ -1386,6 +1525,77 @@ img {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 15px;
+}
+
+.approval-confirmation {
+  margin-top: 16px;
+  padding: 17px;
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  background: var(--limestone);
+}
+
+.approval-confirmation h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.approval-confirmation > p {
+  margin: 6px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.approval-reason-field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.approval-reason-field textarea {
+  width: 100%;
+  min-height: 74px;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--chalk);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.approval-decision-error {
+  color: var(--ink) !important;
+  font-weight: 650;
+}
+
+.approval-decision-note {
+  margin-top: 14px !important;
+  padding-top: 13px;
+  border-top: 1px solid rgba(7, 6, 7, 0.14);
+}
+
+.button.danger {
+  border-color: var(--obsidian);
+  background: var(--obsidian);
+  color: var(--chalk);
+}
+
+.button.danger:hover {
+  background: #282526;
+}
+
+.data-access-notice {
+  margin-bottom: 14px;
+  padding: 13px 17px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--soft);
+  color: var(--ink-2);
+  font-size: 13px;
 }
 
 .mini-chart {
@@ -2062,6 +2272,11 @@ img {
 
   .approval-facts {
     gap: 5px;
+  }
+
+  .approval-title-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .approval-fact {

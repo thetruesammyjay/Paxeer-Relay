@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ResourcePage } from "@/components/resource-page";
+import { ReceiptDirectory } from "@/components/receipt-directory";
 export const metadata: Metadata = { title: "Receipts" };
 export default function Page() {
-  return <ResourcePage kind="receipts" />;
+  return <ReceiptDirectory />;
 }

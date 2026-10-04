@@ -3,14 +3,7 @@
 import { useMemo, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
-export type ResourceKind =
-  | "approvals"
-  | "agents"
-  | "policies"
-  | "providers"
-  | "services"
-  | "receipts"
-  | "settings";
+export type ResourceKind = "settings";
 type Config = {
   eyebrow: string;
   title: string;
@@ -21,212 +14,6 @@ type Config = {
   rows: string[][];
 };
 const CONFIG: Record<ResourceKind, Config> = {
-  approvals: {
-    eyebrow: "Human authority",
-    title: "Approvals",
-    description:
-      "Decide on requests that exceed an agent’s standing permissions.",
-    action: "Approval settings",
-    icon: "approvals",
-    columns: ["Request", "Agent", "Reason", "Amount", "Expires", "Status"],
-    rows: [
-      [
-        "apr_01J…N8",
-        "Research Runner",
-        "Above per-call cap",
-        "0.190 USDX",
-        "08:42",
-        "Pending",
-      ],
-      [
-        "apr_01J…C4",
-        "Treasury Scout",
-        "New provider",
-        "1.200 USDX",
-        "21:06",
-        "Pending",
-      ],
-      [
-        "apr_01J…V2",
-        "Support Triage",
-        "Scope expansion",
-        "0.045 USDX",
-        "Closed",
-        "Denied",
-      ],
-    ],
-  },
-  agents: {
-    eyebrow: "Autonomous operators",
-    title: "Agents",
-    description:
-      "Give each agent a wallet, a policy, and only the authority it needs.",
-    action: "Add agent",
-    icon: "agents",
-    columns: ["Agent", "Wallet", "Policy", "Spend today", "Calls", "Status"],
-    rows: [
-      [
-        "Research Runner",
-        "0x7A3…91F",
-        "Research standard",
-        "$183.42",
-        "8,204",
-        "Active",
-      ],
-      [
-        "Treasury Scout",
-        "0x2B8…E47",
-        "Treasury strict",
-        "$74.10",
-        "1,986",
-        "Active",
-      ],
-      [
-        "Support Triage",
-        "0x9D1…2C0",
-        "Support tools",
-        "$27.10",
-        "3,112",
-        "Active",
-      ],
-      ["Release Bot", "0x4F2…A19", "Deploy restricted", "$0.00", "0", "Paused"],
-    ],
-  },
-  policies: {
-    eyebrow: "Deterministic controls",
-    title: "Policies",
-    description:
-      "Encode budgets, allowlists, and approval rules before an agent spends.",
-    action: "Create policy",
-    icon: "policies",
-    columns: [
-      "Policy",
-      "Version",
-      "Assigned",
-      "Daily cap",
-      "Approval above",
-      "Status",
-    ],
-    rows: [
-      ["Research standard", "v7", "1 agent", "250 USDX", "0.10 USDX", "Active"],
-      ["Treasury strict", "v4", "1 agent", "100 USDX", "1.00 USDX", "Active"],
-      ["Support tools", "v2", "1 agent", "50 USDX", "0.05 USDX", "Active"],
-      ["Deploy restricted", "v9", "1 agent", "20 USDX", "Any spend", "Paused"],
-    ],
-  },
-  providers: {
-    eyebrow: "Routing network",
-    title: "Providers",
-    description: "Monitor the endpoints that fulfill paid agent requests.",
-    action: "Register provider",
-    icon: "providers",
-    columns: [
-      "Provider",
-      "Services",
-      "Reliability",
-      "Median latency",
-      "30d volume",
-      "Status",
-    ],
-    rows: [
-      ["Atlas Labs", "12", "99.99%", "183 ms", "$18.4k", "Active"],
-      ["Paxeer Oracle", "4", "99.97%", "76 ms", "$9.8k", "Active"],
-      ["Vector Cloud", "9", "99.82%", "291 ms", "$6.2k", "Active"],
-      ["Model Forge", "18", "99.91%", "840 ms", "$24.1k", "Active"],
-    ],
-  },
-  services: {
-    eyebrow: "Paid capabilities",
-    title: "Services",
-    description:
-      "Discover routable tools with explicit prices, evidence, and health.",
-    action: "Publish service",
-    icon: "services",
-    columns: [
-      "Service",
-      "Provider",
-      "Capability",
-      "Price",
-      "p95 latency",
-      "Status",
-    ],
-    rows: [
-      [
-        "Market snapshot",
-        "Atlas Labs",
-        "data.market",
-        "0.024 USDX",
-        "310 ms",
-        "Active",
-      ],
-      [
-        "PAX / USDX price",
-        "Paxeer Oracle",
-        "oracle.price",
-        "0.008 USDX",
-        "94 ms",
-        "Active",
-      ],
-      [
-        "Vector lookup",
-        "Vector Cloud",
-        "memory.search",
-        "0.012 USDX",
-        "420 ms",
-        "Active",
-      ],
-      [
-        "Reasoning large",
-        "Model Forge",
-        "model.infer",
-        "0.190 USDX",
-        "1.4 s",
-        "Active",
-      ],
-    ],
-  },
-  receipts: {
-    eyebrow: "Verifiable evidence",
-    title: "Receipts",
-    description:
-      "Prove what was requested, paid, delivered, and observed by the relay.",
-    action: "Verify receipt",
-    icon: "receipts",
-    columns: [
-      "Receipt",
-      "Transaction",
-      "Provider",
-      "Observed at",
-      "Anchor",
-      "Status",
-    ],
-    rows: [
-      [
-        "rcp_01J…4M",
-        "txn_8V4…K2",
-        "Atlas Labs",
-        "09:42:18",
-        "LayerX batch 882",
-        "Verified",
-      ],
-      [
-        "rcp_01J…1Q",
-        "txn_2M9…Q8",
-        "Paxeer Oracle",
-        "09:41:54",
-        "LayerX batch 882",
-        "Verified",
-      ],
-      [
-        "rcp_01J…7K",
-        "txn_1A3…D7",
-        "ChainScope",
-        "09:36:07",
-        "LayerX batch 881",
-        "Verified",
-      ],
-    ],
-  },
   settings: {
     eyebrow: "Workspace controls",
     title: "Settings",
@@ -336,11 +123,7 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
       </div>
       <section className="card">
         <div className="card-head">
-          <h2 className="card-title">
-            {kind === "approvals"
-              ? "Requests requiring a decision"
-              : `All ${config.title.toLowerCase()}`}
-          </h2>
+          <h2 className="card-title">All {config.title.toLowerCase()}</h2>
           <span className="status neutral">Sample data</span>
         </div>
         <div className="table-wrap">
@@ -361,7 +144,7 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
                   </td>
                 </tr>
               ) : (
-                rows.map((row, index) => (
+                rows.map((row) => (
                   <tr key={row[0]}>
                     {row.map((cell, cellIndex) => (
                       <td
@@ -378,22 +161,6 @@ export function ResourcePage({ kind }: { kind: ResourceKind }) {
                           <span className={`status ${statusTone(cell)}`}>
                             {cell}
                           </span>
-                        ) : cellIndex === 1 &&
-                          ["agents", "approvals"].includes(
-                            kind,
-                          ) ? (
-                          <div className="agent-cell">
-                            <span
-                              className={`agent-avatar ${index % 3 === 0 ? "orange" : index % 3 === 1 ? "green" : "blue"}`}
-                            >
-                              {cell
-                                .split(" ")
-                                .map((part) => part[0])
-                                .join("")
-                                .slice(0, 2)}
-                            </span>
-                            <span className="primary-cell">{cell}</span>
-                          </div>
                         ) : (
                           cell
                         )}
