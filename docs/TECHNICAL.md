@@ -69,7 +69,9 @@ The web console is still a prototype and most views use sample data. The
 agents, policies, providers, services, receipts, analytics, and transaction
 pages are connected to their API endpoints when keys with `agents:read`,
 `policies:read`, `providers:read`, `services:read`, `receipts:read`,
-`analytics:read`, or `transactions:read` scope are supplied.
+`analytics:read`, or `transactions:read` scope are supplied. Settings lists
+project keys with `api-keys:read` and creates or revokes them with
+`api-keys:write`.
 The approvals page reads with
 `approvals:read` and records decisions with `approvals:write`. Keys stay in
 page memory and are not written to browser storage. The policy list API returns
@@ -80,6 +82,8 @@ settings; the services endpoint does not provide the latest probe result.
 The receipts page lists up to 100 recent tenant-scoped summaries and displays
 the signature and hash fields returned by the API. It does not verify receipt
 signatures. Receipt payment amounts are kept as exact atomic-unit integers.
+API-key secrets are returned only on creation and remain in page memory for
+the one-time copy step; the inventory endpoint returns key metadata only.
 The simulator
 returns fabricated network results. The worker expires overdue policy
 approvals, fans supported outbox events into durable delivery rows, and sends

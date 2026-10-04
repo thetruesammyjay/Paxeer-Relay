@@ -195,12 +195,18 @@ existing routes and navigation groups:
 | Configure | Agents, Policies | Control who can spend and under which limits |
 | Network | Providers, Services | Manage available service destinations |
 | Evidence | Receipts, Analytics | Inspect outcomes and spending records |
-| Workspace | Settings | Review workspace configuration |
+| Workspace | Settings | Manage project API access |
 
 The current Receipts page reads up to 100 tenant-scoped summaries with a
 `receipts:read` key. Keep payment amounts in exact atomic units and show hashes
 and signature metadata as returned by the API. The page does not verify the
 signature, so avoid verified or trusted labels unless verification is added.
+
+Settings manages project API keys. Use `api-keys:read` for the inventory and
+require `api-keys:write` for creation or revocation. Show the secret returned
+by key creation once, keep it in page memory, and make revocation an explicit
+confirmed action. Do not imply that network defaults or other workspace
+preferences can be changed until the API supports them.
 
 Keep the page order: title and workspace context; relay, settlement, success,
 and attention metrics; a request lifecycle; recent transactions; approval
@@ -301,6 +307,7 @@ provider-scoped authentication, and live creator data are not connected yet.
 | Overview and operations pages | `apps/web/app/dashboard/`, `agents/`, `policies/`, `approvals/`, `transactions/` | Current operator experience |
 | Network pages | `apps/web/app/providers/`, `services/` | Provider and service administration |
 | Evidence pages | `apps/web/app/receipts/`, `analytics/` | Live tenant receipt summaries and analytics |
+| Workspace security | `apps/web/app/settings/`, `apps/web/components/api-key-inventory.tsx` | Project API-key inventory, creation, and confirmed revocation |
 | Shared page and state components | `apps/web/components/` | Reusable presentation pieces |
 | API boundary and query hooks | `apps/web/lib/`, `apps/web/hooks/` | Typed HTTP access; not yet wired to every screen |
 | Admin and creator overview pages | `apps/web/app/admin/page.tsx`, `apps/web/app/creator/page.tsx` | Current visual previews using sample data |

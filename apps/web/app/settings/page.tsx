@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ResourcePage } from "@/components/resource-page";
+import { ApiKeyInventory } from "@/components/api-key-inventory";
 export const metadata: Metadata = { title: "Settings" };
 export default function Page() {
-  return <ResourcePage kind="settings" />;
+  return <ApiKeyInventory />;
 }

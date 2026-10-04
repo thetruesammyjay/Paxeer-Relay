@@ -55,7 +55,7 @@ apps/web/
 │   ├── providers/page.tsx             # Live tenant provider directory
 │   ├── receipts/page.tsx              # Live tenant receipt summaries
 │   ├── services/page.tsx              # Live tenant service directory
-│   ├── settings/page.tsx              # PaxRelay workspace settings
+│   ├── settings/page.tsx              # Live project API-key controls
 │   ├── transactions/page.tsx          # Request and payment activity
 │   ├── globals.css                    # Tokens, shared components, dashboard and mobile styles
 │   └── layout.tsx                     # Root metadata and AppShell
@@ -64,6 +64,7 @@ apps/web/
 │   ├── agent-directory.tsx            # Scoped live agent list, filters, and empty/error states
 │   ├── analytics-dashboard.tsx        # Scoped live spend and capability analytics
 │   ├── approval-queue.tsx             # Scoped approval review and confirmed decisions
+│   ├── api-key-inventory.tsx           # Scoped key inventory, creation, and confirmed revocation
 │   ├── icons.tsx                      # Existing small inline icons used by older PaxRelay screens
 │   ├── marketing-chrome.tsx           # Shared sticky public header and footer
 │   ├── policy-directory.tsx            # Scoped live policy summaries and filters
@@ -71,7 +72,6 @@ apps/web/
 │   ├── receipt-directory.tsx           # Scoped receipt summaries and signature evidence
 │   ├── service-directory.tsx           # Scoped live services, prices, protocols, and probe settings
 │   ├── reveal.tsx                     # Reduced-motion-aware scroll reveals
-│   ├── resource-page.tsx              # Shared presentation for resource screens
 │   ├── scoped-api-key-access.tsx       # In-memory scoped API key entry
 │   ├── settlement-review.tsx          # Reconciliation queue and evidence details
 │   ├── status-badge.tsx               # Shared status label
@@ -79,6 +79,7 @@ apps/web/
 ├── hooks/
 │   ├── use-agents.ts                  # Session-scoped React Query hook for agents
 │   ├── use-analytics.ts                # Session-scoped analytics API queries
+│   ├── use-api-keys.ts                 # Session-scoped key inventory and mutations
 │   ├── use-approvals.ts               # Session-scoped queue and decision mutation
 │   ├── use-policies.ts                # Session-scoped policy list query
 │   ├── use-providers.ts               # Session-scoped provider list query
@@ -148,6 +149,11 @@ uses `hooks/use-receipts.ts` to read up to 100 tenant-scoped summaries with a
 shows the returned hashes and signature metadata. The page does not verify
 signatures because this endpoint returns a summary rather than the complete
 canonical receipt.
+`app/settings/page.tsx` composes `components/api-key-inventory.tsx` and
+`hooks/use-api-keys.ts`. It lists up to 100 project keys with `api-keys:read`,
+and creates or revokes keys with `api-keys:write`. New raw secrets stay in page
+memory and are shown once. The current API does not expose general workspace
+preferences such as network defaults or receipt-retention settings.
 
 ## Route map
 
@@ -170,7 +176,7 @@ canonical receipt.
 | `/services` | `app/services/page.tsx` | Reads up to 100 recent service records with a `services:read` key; supports search, status, and protocol filters. Displays configured probe settings, not live health results. |
 | `/receipts` | `app/receipts/page.tsx` | Reads up to 100 tenant-scoped receipt summaries with a `receipts:read` key; supports local search and execution-state filtering. Shows signature metadata but does not verify signatures. |
 | `/analytics` | `app/analytics/page.tsx` | Reads the last 30 days of spend and capability totals from the API with an `analytics:read` key. |
-| `/settings` | `app/settings/page.tsx` | PaxRelay workspace settings presentation. |
+| `/settings` | `app/settings/page.tsx` | Lists up to 100 project API keys with `api-keys:read`; create and revoke require `api-keys:write`. Newly created secrets are shown once in page memory. General workspace preferences are not exposed by the current API. |
 | `/api/health` | `app/api/health/route.ts` | Next.js process health. It does not check FastAPI or the database. |
 
 The admin and creator pages have overview sections for their mobile and desktop
@@ -240,9 +246,10 @@ labels, and controls under `components/`.
 ### `components/`: shared interface pieces
 
 `app-shell.tsx` owns the role-specific sidebar, dashboard switcher, top bar,
-mobile navigation, and quick-action sheet. `resource-page.tsx` composes the
-existing PaxRelay resource views. Keep shared behavior here and use
-[`DESIGN.md`](DESIGN.md) for visual rules.
+mobile navigation, and quick-action sheet. Use feature components for live
+resource pages; Settings uses `components/api-key-inventory.tsx`. Keep shared
+behavior in reusable components and use [`DESIGN.md`](DESIGN.md) for visual
+rules.
 
 ### `hooks/` and `lib/`: API boundary
 
@@ -250,12 +257,12 @@ existing PaxRelay resource views. Keep shared behavior here and use
 token from its caller and unwraps the API error envelope. Hooks such as
 `hooks/use-analytics.ts`, `hooks/use-transactions.ts`, and
 `hooks/use-settlement-reconciliation.ts` own request state and API response
-types. Analytics, transactions, and settlement review keep their keys in React
-state, never browser storage. The API client is not connected to every screen:
-the admin and creator overviews and most other dashboard pages still show
-sample data. The network adapter paths and response contracts still require
-operator confirmation before the data can be treated as production settlement
-evidence.
+types. Read-only dashboard access keys and one-time newly created API secrets
+stay in page memory, never browser storage. The dashboard, admin, and creator
+overviews still show sample data; the resource pages are connected only where
+their matching API route and scope are implemented. The network adapter paths
+and response contracts still require operator confirmation before the data can
+be treated as production settlement evidence.
 
 ```text
 Route page

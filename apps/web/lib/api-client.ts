@@ -109,6 +109,8 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, code, message);
   }
 
+  if (res.status === 204) return undefined as T;
+
   if (integerFieldsAsStrings?.length) {
     const body = await res.text();
     return JSON.parse(preserveJsonIntegerFields(body, integerFieldsAsStrings)) as T;

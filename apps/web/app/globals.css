@@ -1313,6 +1313,150 @@ img {
   white-space: normal;
 }
 
+.api-key-create-card {
+  margin-bottom: 14px;
+}
+
+.api-key-create-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.api-key-create-form .scoped-key-field input,
+.api-key-create-form .scoped-key-field select {
+  width: 100%;
+}
+
+.api-key-scopes {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.api-key-scopes legend {
+  margin-bottom: 7px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.api-key-scope-picker {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--limestone);
+}
+
+.api-key-scope-picker summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.api-key-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px 14px;
+  margin-top: 14px;
+}
+
+.api-key-scope-grid label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.api-key-scope-grid input {
+  flex: 0 0 auto;
+  accent-color: var(--ember);
+}
+
+.api-key-scope-grid code,
+.api-key-scope-tags code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.api-key-scope-picker > p {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.api-key-secret {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 22px;
+  border-color: rgba(252, 80, 0, 0.35);
+}
+
+.api-key-secret h2,
+.api-key-secret p {
+  margin: 0;
+}
+
+.api-key-secret > code {
+  display: block;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chalk);
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.api-key-secret > p:last-child {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.api-key-table {
+  min-width: 1240px;
+}
+
+.api-key-scope-tags {
+  display: flex;
+  max-width: 290px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.api-key-scope-tags code {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--soft);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.api-key-revoke-confirm {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  white-space: normal;
+}
+
+.form-error {
+  margin: 10px 0;
+  color: #8e2f20;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .service-capability {
   color: var(--ink);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -2902,6 +3046,20 @@ img {
 
   .scoped-key-connected {
     justify-content: space-between;
+  }
+
+  .api-key-create-form,
+  .api-key-scope-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .api-key-create-form {
+    padding-inline: 16px;
+  }
+
+  .api-key-create-form .page-actions,
+  .api-key-create-form .page-actions .button {
+    width: 100%;
   }
 
   .analytics-metrics {
