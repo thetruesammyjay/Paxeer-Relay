@@ -98,6 +98,11 @@ def _to_service(m: ServiceModel) -> Service:
             interval_seconds=health.get("interval_seconds", 30),
             timeout_seconds=health.get("timeout_seconds", 5),
             failure_threshold=health.get("failure_threshold", 3),
+            last_check_at=health.get("last_check_at"),
+            last_check_passing=health.get("last_check_passing"),
+            consecutive_health_failures=health.get("consecutive_health_failures", 0),
+            last_check_status_code=health.get("last_check_status_code"),
+            last_check_error=health.get("last_check_error"),
         ),
         status=ServiceStatus(m.status),
         base_url=m.base_url,
@@ -205,12 +210,22 @@ def _delivery_to_json(delivery: ServiceDelivery) -> dict:
 
 
 def _health_to_json(health: ServiceHealth) -> dict:
-    return {
+    value = {
         "endpoint": health.endpoint,
         "interval_seconds": health.interval_seconds,
         "timeout_seconds": health.timeout_seconds,
         "failure_threshold": health.failure_threshold,
+        "consecutive_health_failures": health.consecutive_health_failures,
     }
+    if health.last_check_at is not None:
+        value["last_check_at"] = health.last_check_at.isoformat()
+    if health.last_check_passing is not None:
+        value["last_check_passing"] = health.last_check_passing
+    if health.last_check_status_code is not None:
+        value["last_check_status_code"] = health.last_check_status_code
+    if health.last_check_error is not None:
+        value["last_check_error"] = health.last_check_error
+    return value
 
 
 class SqlAlchemyProviderRepository:
@@ -310,6 +325,43 @@ class SqlAlchemyProviderRepository:
         )
         m = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_service(m) if m is not None else None
+
+    async def set_service_status(
+        self,
+        service_id: UUID,
+        *,
+        organisation_id: UUID,
+        project_id: UUID,
+        environment: str,
+        status: ServiceStatus,
+    ) -> tuple[Service, ServiceStatus] | None:
+        """Update one tenant-owned service without replacing health metadata."""
+        stmt = (
+            select(ServiceModel)
+            .where(
+                ServiceModel.id == sid(service_id),
+                ServiceModel.organisation_id == sid(organisation_id),
+                ServiceModel.project_id == sid(project_id),
+                ServiceModel.environment == environment,
+                ServiceModel.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        if model is None:
+            return None
+
+        previous_status = ServiceStatus(model.status)
+        # Deprecated services are terminal. The API maps this unchanged result
+        # to a conflict instead of silently restoring it to routing.
+        if previous_status == ServiceStatus.DEPRECATED:
+            return _to_service(model), previous_status
+
+        if previous_status != status:
+            model.status = status.value
+            await self._session.flush()
+            await self._session.refresh(model)
+        return _to_service(model), previous_status
 
     async def list_services(self, provider_id: UUID) -> list[Service]:
         stmt = (
@@ -428,6 +480,7 @@ class SqlAlchemyProviderRepository:
         capability: str,
         organisation_id: UUID,
         project_id: UUID,
+        environment: str,
     ) -> list[tuple[Service, ServiceVersion, ProviderMetrics]]:
         """Return (service, version, metrics) for every active, healthy match.
 
@@ -436,6 +489,7 @@ class SqlAlchemyProviderRepository:
         """
         stmt = (
             select(ServiceModel, ServiceVersionModel, ProviderMetricsModel)
+            .join(ProviderModel, ProviderModel.id == ServiceModel.provider_id)
             .join(
                 ServiceVersionModel,
                 ServiceVersionModel.service_id == ServiceModel.id,
@@ -447,9 +501,15 @@ class SqlAlchemyProviderRepository:
             .where(
                 ServiceModel.organisation_id == sid(organisation_id),
                 ServiceModel.project_id == sid(project_id),
+                ServiceModel.environment == environment,
                 ServiceModel.capability == capability,
                 ServiceModel.status == "active",
                 ServiceModel.deleted_at.is_(None),
+                ProviderModel.organisation_id == sid(organisation_id),
+                ProviderModel.project_id == sid(project_id),
+                ProviderModel.environment == environment,
+                ProviderModel.status == "active",
+                ProviderModel.deleted_at.is_(None),
                 ServiceVersionModel.is_active.is_(True),
                 ProviderMetricsModel.health_check_passing.is_(True),
             )

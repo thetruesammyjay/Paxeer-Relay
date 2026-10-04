@@ -14,7 +14,7 @@ which parts are present in the current checkout.
 - [API reference](api-reference.md) — control-plane, gateway, and simulator
   routes, inputs, outputs, and current limitations.
 - [Python SDK guide](../packages/sdk-python/README.md) — connect to the API and
-  manage tenant agents, providers, services, spend policies, approvals,
+  manage tenant agents, providers, service publication and routing, spend policies, approvals,
   analytics, receipt history, and transaction history from Python.
 - [Architecture](architecture.md) — application roles, data flow, and trust
   boundaries.
@@ -87,8 +87,20 @@ with `providers:write`. It collects an optional HTTP(S) website and address;
 production registrations require a payment wallet address. Provider website
 links are rendered only for HTTP(S) URLs. Registration does not verify provider
 ownership, and the directory does not show live health or performance.
-The services page lists up to 100 recent records and shows configured probe
-settings; the services endpoint does not provide the latest probe result.
+The services page reads records with `services:read` and publishes services
+with `services:write` for a provider UUID. The form stores USDX prices as exact
+six-decimal atomic units, validates protocol and health-check settings, and
+requires the user to copy the provider UUID from Providers. Use HTTPS for
+staging and production; the gateway checks URLs and the production host
+allowlist when forwarding. New services are not routable until a health probe
+passes. The list shows the latest probe result, timestamp, and consecutive
+failure count. Apply Alembic revision `0014_provider_health_fail_closed`
+before rollout; it marks legacy services without a recorded probe as
+unavailable until measured. A `services:write` key can pause or resume a
+service; pausing prevents new routes while allowing already-issued, unexpired
+quotes to finish when the provider remains active and health checks pass. The
+status transition is audited and emitted as
+`service.disabled` or `service.enabled`.
 The receipts page lists up to 100 recent tenant-scoped summaries and displays
 the signature and hash fields returned by the API. It does not verify receipt
 signatures. Receipt payment amounts are kept as exact atomic-unit integers.
@@ -96,8 +108,9 @@ API-key secrets are returned only on creation and remain in page memory for
 the one-time copy step; the inventory endpoint returns key metadata only.
 The simulator
 returns fabricated network results. The worker expires overdue policy
-approvals, fans supported outbox events into durable delivery rows, and sends
-HMAC-signed webhook requests with DNS pinning and bounded retries. Reconciliation
+approvals, marks stale paid executions unknown without replaying providers,
+fans supported outbox events into durable delivery rows, and sends HMAC-signed
+webhook requests with DNS pinning and bounded retries. Reconciliation
 checks local payment facts and reads LayerX/Paxeer adapter evidence, but the
 external settlement endpoint contract still needs validation with the network
 operator. Provider health probes and rolling provider metrics are implemented.

@@ -1,9 +1,9 @@
 # PaxRelay Python SDK
 
 The Python SDK provides an async client for the control-plane API. It can
-register and inspect agents and providers, publish services, configure spend
-policies, review approvals, read receipt and transaction history, and verify
-signed execution receipts.
+register and inspect agents and providers, publish and manage service routing,
+configure spend policies, review approvals, read receipt and transaction
+history, and verify signed execution receipts.
 
 ## Install
 
@@ -91,6 +91,17 @@ The API verifies that the provider belongs to the current tenant. In a
 production tenant, the provider must have a wallet address and the service
 URLs must meet the API's production HTTPS rules.
 
+Pause or resume a service with a `services:write` key:
+
+```python
+paused = await client.services.pause(service.id)
+resumed = await client.services.resume(paused.id)
+```
+
+Pausing prevents new routes. An already-issued, unexpired quote may still
+complete while the provider remains active and its health check passes.
+PaxRelay cannot reverse a payment already sent through an external network.
+
 ## Set a spending policy
 
 ```python
@@ -103,15 +114,25 @@ async def configure_agent_policy(client, agent, provider_id):
         approval_threshold_atomic=100_000,
         allowed_capabilities=["research.*"],
         blocked_providers=[str(provider_id)],
+        minimum_provider_reputation=0.7,
+        minimum_provider_success_rate=0.9,
+        maximum_accepted_latency_ms=2_000,
+        maximum_consecutive_failures=3,
     )
     assignment = await client.policies.assign(policy.id, agent_id=agent.id)
-    return policy, assignment
+    detail = await client.policies.get(policy.id)
+    return policy, assignment, detail
 ```
 
 Amounts use USDX atomic units with six decimal places. For example,
-`250_000` means `0.25 USDX`. The API returns policy metadata and assignment
-details, but the current policy read routes do not return the stored rule
-configuration. Provider allow/block lists contain provider UUIDs.
+`250_000` means `0.25 USDX`. Provider reputation and success thresholds use a
+0 to 1 scale; maximum latency is in milliseconds and is compared with the
+selected service's indexed average. The failure limit counts completed
+provider attempts since the agent's last successful attempt. Once the limit is
+reached, assign a policy without the limit to restore calls. `create()` and
+`list()` return policy metadata; `get()` returns a `PolicyDetail` with all
+configured rules and agent assignments. Provider allow/block lists contain
+provider UUIDs.
 
 ## Review approval requests
 

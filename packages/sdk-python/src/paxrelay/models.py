@@ -115,6 +115,33 @@ class PolicyAssignment(APIModel):
     assigned_at: datetime
 
 
+class PolicyRules(APIModel):
+    """Configured controls returned with a policy detail response."""
+
+    maximum_per_call: Money | None = None
+    daily_budget: Money | None = None
+    monthly_budget: Money | None = None
+    allowed_capabilities: list[str] = Field(default_factory=list)
+    allowed_providers: list[str] = Field(default_factory=list)
+    blocked_providers: list[str] = Field(default_factory=list)
+    allowed_contracts: list[str] = Field(default_factory=list)
+    minimum_provider_reputation: float | None = None
+    minimum_provider_success_rate: float | None = None
+    maximum_accepted_latency_ms: int | None = None
+    approval_threshold: Money | None = None
+    maximum_consecutive_failures: int | None = None
+    maximum_drawdown: Money | None = None
+    session_expiry_seconds: int | None = None
+    allowed_currencies: list[str] = Field(default_factory=list)
+
+
+class PolicyDetail(Policy):
+    """Policy metadata, configured rules, and tenant agent assignments."""
+
+    rules: PolicyRules
+    assignments: list[PolicyAssignment] = Field(default_factory=list)
+
+
 class ApprovalRequest(APIModel):
     """A human-review request created by a policy-gated tool call."""
 
@@ -148,6 +175,24 @@ class Transaction(APIModel):
     request_state: str
     payment_state: str
     execution_state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExecutionAttempt(APIModel):
+    """Safe lifecycle metadata for one provider execution attempt."""
+
+    id: UUID
+    tool_call_id: UUID
+    provider_id: UUID
+    service_version_id: UUID
+    attempt_number: int
+    execution_state: str
+    request_forwarded_at: datetime | None
+    response_received_at: datetime | None
+    latency_ms: int | None
+    http_status_code: int | None
+    provider_error_code: str | None
     created_at: datetime
     updated_at: datetime
 

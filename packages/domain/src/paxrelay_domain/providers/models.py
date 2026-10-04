@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -79,7 +79,7 @@ class ServiceDelivery(BaseModel):
 
 
 class ServiceHealth(BaseModel):
-    """Health-check configuration for a service."""
+    """Configured health checks and the latest persisted worker observation."""
 
     model_config = {"frozen": True}
 
@@ -87,6 +87,20 @@ class ServiceHealth(BaseModel):
     interval_seconds: int = Field(default=30, ge=5)
     timeout_seconds: int = Field(default=5, ge=1)
     failure_threshold: int = Field(default=3, ge=1)
+    last_check_at: datetime | None = None
+    last_check_passing: bool | None = None
+    consecutive_health_failures: int = Field(default=0, ge=0)
+    last_check_status_code: int | None = Field(default=None, ge=100, le=599)
+    last_check_error: str | None = Field(default=None, max_length=128)
+
+    @field_validator("last_check_at")
+    @classmethod
+    def normalise_last_check_at(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class Provider(BaseModel):
@@ -180,16 +194,16 @@ class ProviderMetrics(BaseModel):
     provider_id: UUID
 
     # Reputation — based on community ratings and historical reliability
-    reputation_score: float = Field(default=1.0, ge=0.0, le=1.0)
+    reputation_score: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # Delivery success rate over rolling window
-    success_rate: float = Field(default=1.0, ge=0.0, le=1.0)
+    success_rate: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # P50 response latency in milliseconds
     avg_latency_ms: float = Field(default=0.0, ge=0.0)
 
     # Fraction of time the service responds to health checks
-    availability_score: float = Field(default=1.0, ge=0.0, le=1.0)
+    availability_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
     # Total completed calls in the measurement window
     total_calls: int = Field(default=0, ge=0)
@@ -198,6 +212,6 @@ class ProviderMetrics(BaseModel):
     consecutive_failures: int = Field(default=0, ge=0)
 
     # Whether the health check is currently passing
-    health_check_passing: bool = True
+    health_check_passing: bool = False
 
     measured_at: datetime = Field(default_factory=datetime.utcnow)

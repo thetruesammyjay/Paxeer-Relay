@@ -17,8 +17,10 @@ from paxrelay_db import close_database, configure_database
 from paxrelay_paxeer import MockPaxeerAdapter, OfficialPaxeerAdapter
 
 from paxrelay_worker.config import get_settings
+from paxrelay_worker.health import WorkerHealthMonitor, WorkerHealthServer
 from paxrelay_worker.jobs.analytics import AnalyticsJob
 from paxrelay_worker.jobs.approvals import ApprovalExpirationJob
+from paxrelay_worker.jobs.execution_recovery import ExecutionRecoveryJob
 from paxrelay_worker.jobs.health import HealthCheckJob
 from paxrelay_worker.jobs.indexing import ProviderIndexJob
 from paxrelay_worker.jobs.outbox import OutboxJob
@@ -53,18 +55,45 @@ async def run() -> None:
             l1_confirmation_blocks=settings.paxeer_l1_confirmation_blocks,
         )
 
+    jobs = (
+        ReconciliationJob(settings, network_adapter, network_adapter),
+        ApprovalExpirationJob(settings),
+        ExecutionRecoveryJob(settings),
+        ProviderIndexJob(settings),
+        AnalyticsJob(settings),
+        OutboxJob(settings),
+        WebhookDeliveryJob(settings),
+        HealthCheckJob(settings),
+    )
+    health_monitor = WorkerHealthMonitor()
+    for job in jobs:
+        health_monitor.register_job(job.health_name, job.interval_seconds)
+    health_server = WorkerHealthServer(
+        host=settings.worker_health_host,
+        port=settings.worker_health_port,
+        monitor=health_monitor,
+    )
+    tasks: list[asyncio.Task[None]] = []
     try:
-        await asyncio.gather(
-            ReconciliationJob(settings, network_adapter, network_adapter).run(),
-            ApprovalExpirationJob(settings).run(),
-            ProviderIndexJob(settings).run(),
-            AnalyticsJob(settings).run(),
-            OutboxJob(settings).run(),
-            WebhookDeliveryJob(settings).run(),
-            HealthCheckJob(settings).run(),
-        )
+        await health_server.start()
+        tasks = [
+            asyncio.create_task(
+                job.run(health_monitor),
+                name=f"worker:{type(job).__name__}",
+            )
+            for job in jobs
+        ]
+        await asyncio.gather(*tasks)
     finally:
-        await close_database()
+        try:
+            await health_server.close()
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            await close_database()
 
 
 if __name__ == "__main__":

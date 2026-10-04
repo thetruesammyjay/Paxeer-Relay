@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 
 class EventType(str, Enum):
-    """All event types emitted by PaxRelay, matching the README list exactly."""
+    """Public event types supported by PaxRelay's outbox and webhooks."""
 
     # Agent events
     AGENT_CREATED = "agent.created"
@@ -34,6 +34,7 @@ class EventType(str, Enum):
     # Service events
     SERVICE_PUBLISHED = "service.published"
     SERVICE_DISABLED = "service.disabled"
+    SERVICE_ENABLED = "service.enabled"
 
     # Policy events
     POLICY_CREATED = "policy.created"
@@ -59,6 +60,7 @@ class EventType(str, Enum):
     CALL_EXECUTING = "call.executing"
     CALL_SUCCEEDED = "call.succeeded"
     CALL_FAILED = "call.failed"
+    CALL_RECOVERY_REQUIRED = "call.recovery.required"
 
     # Receipt events
     RECEIPT_CREATED = "receipt.created"

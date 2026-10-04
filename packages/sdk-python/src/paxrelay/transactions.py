@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from paxrelay.models import Transaction
+from paxrelay.models import ExecutionAttempt, Transaction
 
 if TYPE_CHECKING:
     from paxrelay.client import AsyncPaxRelayClient
@@ -48,3 +48,23 @@ class TransactionsResource:
 
         result = await self._client._request("GET", "transactions", params=params)
         return [Transaction.model_validate(item) for item in result]
+
+    async def execution_attempts(
+        self,
+        tool_call_id: UUID | str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[ExecutionAttempt]:
+        """List provider attempt metadata for a tenant-owned transaction.
+
+        If an attempt is ``unknown``, check the provider's records before
+        deciding whether to retry the action.
+        """
+        call_id = self._client._path_id(tool_call_id)
+        result = await self._client._request(
+            "GET",
+            f"transactions/{call_id}/execution-attempts",
+            params={"limit": limit, "offset": offset},
+        )
+        return [ExecutionAttempt.model_validate(item) for item in result]

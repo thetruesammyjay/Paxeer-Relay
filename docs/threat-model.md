@@ -40,7 +40,7 @@ trusted only when access is restricted and backups are protected.
 | Provider endpoint SSRF and data exfiltration | Before a quote and again before forwarding, the gateway validates the URL and every DNS answer. Staging/production require HTTPS and globally routable addresses; production also requires an exact hostname allowlist. The socket connects to a captured address, and redirects are disabled. | Enforce outbound egress rules and verify ownership of allowlisted hosts. The gateway does not prove that an allowlisted public hostname belongs to the registered provider. |
 | Webhook destination SSRF | The worker resolves each destination, rejects restricted addresses, pins the socket to the checked public IPs in staging/production, requires HTTPS, disables redirects, and bounds request/response size and time. | Enforce outbound egress controls and verify ownership of destinations; internal network policy remains an independent boundary. |
 | Unauthenticated API flooding | API and gateway Redis limits start after API-key validation; invalid or unauthenticated requests are not limited by those application counters. | Apply network-level rate limits at the trusted edge to invalid and unauthenticated traffic. |
-| Request/response resource abuse | Gateway rejects oversized inbound bodies, caps streamed provider responses and provider timeouts, validates and pins provider destinations, and limits authenticated keys through Redis in staging/production. It has no concurrency limit; edge limits are still needed for invalid credentials. | Add concurrency limits and enforce network-level egress and edge limits. |
+| Request/response resource abuse | Gateway rejects oversized inbound bodies, caps streamed provider responses and provider timeouts, validates and pins provider destinations, and applies Redis request-rate and in-flight limits per authenticated key in staging/production. | Keep the Redis limits enabled, configure platform-wide and provider-specific capacity, and enforce network-level egress and edge limits for invalid credentials. |
 | Control-plane oversized request bodies | The API rejects write bodies above a configurable 1 MiB default before route processing. | Keep the cap appropriate for batch payloads and configure request timeouts and edge limits for slow clients. |
 | Tenant boundary weakness | Control-plane routes and gateway identity checks enforce organisation, project, and environment boundaries for their current paths. | Preserve these checks in new routes and add cross-tenant tests before release. |
 | Existing API keys may lack new scopes | Scope grants are immutable and are not expanded when a new route scope is introduced. | Reprovision an administrator key through the bootstrap command, issue updated least-privilege keys, and revoke the older key. |
@@ -48,7 +48,7 @@ trusted only when access is restricted and backups are protected.
 | Policy race | For daily/monthly budgets, the gateway locks the agent row before reading spend, includes active unexpired quote reservations, and consumes the reservation in the same transaction as the verified payment. PostgreSQL concurrency behavior still needs integration verification. | Verify simultaneous quote and proof submissions against PostgreSQL; keep budget reservation, payment, and nonce transitions atomic. |
 | Approval lifecycle | The gateway persists a tenant-scoped request and requires `approvals:write` for decisions. Decisions are row-locked and bound to the original provider, service version, amount, recipient, and policy version; current budget and policy rules are rechecked before issuing a quote. A worker expires overdue requests every 30 seconds and records the state transition and audit event in one transaction. Decisions are attributed to API keys, but separate-user identity and separation of duties are not enforced. | Use a dedicated approval key, add operator identity and role separation, and verify simultaneous expiration/decision/invoke transitions against PostgreSQL. |
 | Receipt signature verification depends on a shared canonicalization contract | Receipt v1 normalizes route-score floats and timestamps, signs a SHA-256 digest with low-S ECDSA, and checks the stored hash and strict DER signature encoding. An independent Node.js verifier, a published signed vector, a Python keyring, and SDK helpers are included. | Confirm the receipt workflow passes in CI; keep trust manifests current and distribute revocations promptly before external verification or real-fund use. |
-| External payment and execution are not atomic | Payment is marked verified before the provider call; provider failure does not refund or dispute it. The worker reads LayerX transaction, settlement, and batch evidence and checks the claimed L1 receipt, but it deliberately does not advance payment states. The endpoint contract, commitment event, and relationship between batch contents and the on-chain commitment still require validation with the network operator. | Define compensation and dispute procedures; validate the adapter contract with authoritative LayerX/Paxeer services and staging records before handling real funds. |
+| External payment and execution are not atomic | Payment is marked verified before the provider call; provider failure does not refund or dispute it. A worker marks stale reserved attempts unknown and emits `call.recovery.required` without replaying them. It reads LayerX transaction, settlement, and batch evidence and checks the claimed L1 receipt, but it deliberately does not advance payment states. | Define compensation and dispute procedures; reconcile ambiguous calls with providers; validate the adapter contract with authoritative LayerX/Paxeer services before handling real funds. |
 
 ## Existing protective controls
 
@@ -63,6 +63,9 @@ trusted only when access is restricted and backups are protected.
   the key's active tenant. Completion requests are bound to the exact agent.
 - Redis applies a shared fixed-window request limit per authenticated gateway
   key in staging and production; the gateway fails closed if Redis is unavailable.
+- Redis applies a shared in-flight request cap per authenticated gateway key;
+  request slots are released after completion and expire if a worker process
+  stops before cleanup. The gateway fails closed if Redis cannot enforce the cap.
 - Production gateway startup rejects mock payments, non-HTTPS upstream URLs,
   non-target chain IDs, and local receipt-signing defaults.
 - API key listing hides raw values and hashes; revocation disables the key.
@@ -107,9 +110,11 @@ with a different payload. Successful calls store the bounded provider result
 alongside the signed receipt; a replay returns both without forwarding to the
 provider again. Results may contain sensitive provider data, so access control,
 retention, and backup protections apply. Requests completed before migration
-`0010` have no saved result and cannot replay the full response. The gateway
-still does not recover every in-progress call. Verify the locking and replay
-contract with concurrent PostgreSQL submissions before release.
+`0010` have no saved result and cannot replay the full response. The worker
+marks stale reserved provider attempts unknown and emits an operator event; it
+does not determine whether the provider completed the action or retry it.
+Verify the locking, stale recovery, and replay contract with PostgreSQL before
+release.
 
 ### Webhook forgery and destination abuse
 
@@ -149,9 +154,9 @@ controls. At minimum:
 3. Add provider hostname allowlists, outbound egress rules, gateway concurrency
    limits, and edge rate limits. Body, response, and provider timeout caps are
    now configurable.
-4. Verify budget reservation, nonce consumption, and full result replay with
-   concurrent PostgreSQL submissions; recover calls left in progress after a
-   gateway interruption.
+4. Verify budget reservation, nonce consumption, stale execution recovery, and
+   full result replay with concurrent PostgreSQL submissions; define how
+   operators resolve provider outcomes left unknown after an interruption.
 5. Complete payment failure, refund/dispute, and settlement reconciliation;
    verify approval expiration races against PostgreSQL.
 6. Confirm CI passes the published receipt canonicalization and signature

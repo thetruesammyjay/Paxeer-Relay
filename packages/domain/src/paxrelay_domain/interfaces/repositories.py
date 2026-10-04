@@ -21,7 +21,13 @@ from paxrelay_domain.payments.models import (
     ToolCall,
 )
 from paxrelay_domain.policies.models import Policy, PolicyAssignment
-from paxrelay_domain.providers.models import Provider, ProviderMetrics, Service, ServiceVersion
+from paxrelay_domain.providers.models import (
+    Provider,
+    ProviderMetrics,
+    Service,
+    ServiceStatus,
+    ServiceVersion,
+)
 from paxrelay_domain.receipts.models import ExecutionReceipt
 from paxrelay_domain.routing.models import RouteDecision
 
@@ -67,6 +73,15 @@ class ProviderRepository(Protocol):
     async def get_service(self, service_id: UUID) -> Service | None: ...
     async def list_services(self, provider_id: UUID) -> list[Service]: ...
     async def save_service(self, service: Service) -> Service: ...
+    async def set_service_status(
+        self,
+        service_id: UUID,
+        *,
+        organisation_id: UUID,
+        project_id: UUID,
+        environment: str,
+        status: ServiceStatus,
+    ) -> tuple[Service, ServiceStatus] | None: ...
     async def get_service_version(self, version_id: UUID) -> ServiceVersion | None: ...
     async def save_service_version(self, version: ServiceVersion) -> ServiceVersion: ...
     async def get_metrics(self, service_id: UUID) -> ProviderMetrics | None: ...
@@ -76,6 +91,7 @@ class ProviderRepository(Protocol):
         capability: str,
         organisation_id: UUID,
         project_id: UUID,
+        environment: str,
     ) -> list[tuple[Service, ServiceVersion, ProviderMetrics]]: ...
 
 

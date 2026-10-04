@@ -1,17 +1,20 @@
 [project]
 name = "paxrelay-mcp"
 version = "0.1.0"
-description = "PaxRelay Python MCP provider and agent adapters"
-requires-python = ">=3.12"
+description = "PaxRelay Python MCP adapter for paid agent tools"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=2.0.0,<3",
     "httpx>=0.27.0",
+    "jsonschema>=4.23.0",
     "pydantic>=2.9.0",
     "paxrelay-domain",
+    "paxrelay",
 ]
 
 [tool.uv.sources]
 paxrelay-domain = { workspace = true }
+paxrelay = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

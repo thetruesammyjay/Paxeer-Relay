@@ -75,3 +75,30 @@ class ServicesResource:
         resource_id = self._client._path_id(service_id)
         result = await self._client._request("GET", f"services/{resource_id}")
         return Service.model_validate(result)
+
+    async def set_status(
+        self,
+        service_id: UUID | str,
+        status: Literal["active", "inactive"],
+    ) -> Service:
+        """Set routing availability; requires the ``services:write`` scope.
+
+        Pausing prevents new routes. An already-issued, unexpired quote may
+        still complete while the provider remains active and healthy. PaxRelay
+        cannot reverse a payment already sent through an external network.
+        """
+        resource_id = self._client._path_id(service_id)
+        result = await self._client._request(
+            "PATCH",
+            f"services/{resource_id}/status",
+            json={"status": status},
+        )
+        return Service.model_validate(result)
+
+    async def pause(self, service_id: UUID | str) -> Service:
+        """Stop this service from receiving new routes."""
+        return await self.set_status(service_id, "inactive")
+
+    async def resume(self, service_id: UUID | str) -> Service:
+        """Allow routing again when the provider and health checks are ready."""
+        return await self.set_status(service_id, "active")

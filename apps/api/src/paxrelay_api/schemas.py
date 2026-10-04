@@ -141,6 +141,15 @@ class ServiceHealthConfig(BaseModel):
         return value
 
 
+class ServiceHealthOut(ServiceHealthConfig):
+    """Configured probe settings plus the latest worker observation."""
+
+    last_check_at: datetime | None = None
+    last_check_passing: bool | None = None
+    consecutive_health_failures: int = Field(default=0, ge=0)
+    last_check_status_code: int | None = Field(default=None, ge=100, le=599)
+
+
 class ServiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
@@ -156,6 +165,12 @@ class ServiceCreate(BaseModel):
     description: str | None = None
 
 
+class ServiceStatusUpdate(BaseModel):
+    """Operational service state that controls eligibility for new routes."""
+
+    status: Literal["active", "inactive"]
+
+
 class ServiceOut(BaseModel):
     id: UUID
     provider_id: UUID
@@ -166,7 +181,7 @@ class ServiceOut(BaseModel):
     status: str
     base_url: str | None
     price_per_call: MoneyIn | None
-    health: ServiceHealthConfig
+    health: ServiceHealthOut
     description: str | None
 
 
@@ -185,6 +200,14 @@ class PolicyCreate(BaseModel):
     allowed_capabilities: list[str] = Field(default_factory=list, max_length=100)
     allowed_providers: list[str] = Field(default_factory=list, max_length=100)
     blocked_providers: list[str] = Field(default_factory=list, max_length=100)
+    minimum_provider_reputation: float | None = Field(default=None, ge=0, le=1)
+    minimum_provider_success_rate: float | None = Field(default=None, ge=0, le=1)
+    maximum_accepted_latency_ms: int | None = Field(
+        default=None,
+        ge=0,
+        le=600_000,
+    )
+    maximum_consecutive_failures: int | None = Field(default=None, ge=1, le=1000)
     approval_threshold: MoneyIn | None = None
 
 
@@ -216,11 +239,11 @@ class PolicyRulesOut(BaseModel):
     allowed_providers: list[str] = Field(default_factory=list)
     blocked_providers: list[str] = Field(default_factory=list)
     allowed_contracts: list[str] = Field(default_factory=list)
-    minimum_provider_reputation: float | None = None
-    minimum_provider_success_rate: float | None = None
-    maximum_accepted_latency_ms: int | None = None
+    minimum_provider_reputation: float | None = Field(default=None, ge=0, le=1)
+    minimum_provider_success_rate: float | None = Field(default=None, ge=0, le=1)
+    maximum_accepted_latency_ms: int | None = Field(default=None, ge=0)
     approval_threshold: MoneyIn | None = None
-    maximum_consecutive_failures: int | None = None
+    maximum_consecutive_failures: int | None = Field(default=None, ge=1)
     maximum_drawdown: MoneyIn | None = None
     session_expiry_seconds: int | None = None
     allowed_currencies: list[str] = Field(default_factory=list)
@@ -323,6 +346,24 @@ class TransactionOut(BaseModel):
     request_state: str
     payment_state: str
     execution_state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExecutionAttemptOut(BaseModel):
+    """Safe operational metadata for one provider execution attempt."""
+
+    id: UUID
+    tool_call_id: UUID
+    provider_id: UUID
+    service_version_id: UUID
+    attempt_number: int
+    execution_state: str
+    request_forwarded_at: datetime | None
+    response_received_at: datetime | None
+    latency_ms: int | None
+    http_status_code: int | None
+    provider_error_code: str | None
     created_at: datetime
     updated_at: datetime
 

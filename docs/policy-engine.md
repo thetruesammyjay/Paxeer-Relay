@@ -15,7 +15,7 @@ The evaluator receives:
 - requested amount and currency;
 - current daily and monthly spend;
 - provider reputation, success rate, and average latency;
-- consecutive failure count;
+- the agent's completed provider attempts since its last successful attempt;
 - emergency-stop and session-validity flags.
 
 Monetary values use integer atomic amounts, not floating point.
@@ -59,17 +59,25 @@ capability/provider lists; allowed contracts; provider quality thresholds;
 approval threshold; failure/drawdown fields; session expiry; and currency
 restrictions.
 
-The current control-plane `PolicyCreate` request exposes only mode,
-per-call/daily/monthly amounts, capability/provider allow/block lists, and an
-approval threshold. The remaining domain fields cannot currently be configured
-through that API route. `allowed_contracts`, `maximum_drawdown`, and
-`session_expiry_seconds` are modeled but are not evaluated by the current rule
+The control-plane `PolicyCreate` request supports mode, per-call/daily/monthly
+amounts, capability/provider allow/block lists, provider reputation and success
+thresholds, maximum average latency, a maximum consecutive-failures threshold,
+and an approval threshold. Provider thresholds are evaluated against the
+selected service's indexed metrics. Failure limits use completed provider
+attempts after the agent's latest successful attempt; they exclude requests
+that failed before contacting a provider and attempts that are still running.
+Once reached, the rule blocks subsequent requests. Since blocked requests do
+not create a provider attempt, the operator must assign a policy without this
+limit to restore calls.
+`allowed_contracts`, `maximum_drawdown`, `session_expiry_seconds`, and currency
+restrictions remain unavailable through policy creation; allowed contracts,
+drawdown, and session expiry are also not evaluated by the current rule
 sequence.
 
-The gateway constructs its current policy request with default session-valid,
-zero consecutive failures, and no emergency stop unless code explicitly
-supplies those fields. It loads spend totals and provider metrics, but account
-session proof and failure history are not yet connected to the request.
+The gateway defaults to session-valid and emergency-stop-off when no account
+session source is configured. It loads spend totals, provider metrics, and
+recent completed provider failure history. Account session proof is not yet
+connected to the request.
 
 ## Gateway integration
 

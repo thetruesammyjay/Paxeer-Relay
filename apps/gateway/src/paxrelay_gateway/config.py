@@ -49,6 +49,12 @@ class GatewaySettings(BaseSettings):
     gateway_rate_limit_enabled: bool | None = None
     gateway_rate_limit_max_requests: int = Field(default=120, ge=1, le=100_000)
     gateway_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
+    gateway_max_concurrent_requests_per_key: int = Field(
+        default=10,
+        ge=1,
+        le=10_000,
+    )
+    gateway_concurrency_lease_seconds: int = Field(default=600, ge=60, le=3600)
 
     # Comma-separated exact hostnames trusted as provider destinations.
     provider_endpoint_host_allowlist: str = Field(default="", max_length=4096)
@@ -152,6 +158,14 @@ class GatewaySettings(BaseSettings):
                 raise ValueError(
                     "PAXEER_RPC_URL must point to the staging network in staging"
                 )
+        if (
+            self.gateway_concurrency_lease_seconds
+            <= self.gateway_request_timeout_seconds + 60
+        ):
+            raise ValueError(
+                "GATEWAY_CONCURRENCY_LEASE_SECONDS must exceed the provider request "
+                "timeout plus the payment verification allowance"
+            )
         if self.app_env == "production":
             if self.paxeer_network_environment != "mainnet":
                 raise ValueError(

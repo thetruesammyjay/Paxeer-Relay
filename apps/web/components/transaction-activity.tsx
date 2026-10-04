@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScopedApiKeyAccess } from "@/components/scoped-api-key-access";
-import { useTransactions } from "@/hooks/use-transactions";
+import { useExecutionAttempts, useTransactions } from "@/hooks/use-transactions";
 import type { Transaction } from "@/hooks/use-transactions";
 import { ApiError } from "@/lib/api-client";
 
@@ -145,12 +145,18 @@ export function TransactionActivity() {
   const [requestState, setRequestState] = useState("");
   const [paymentState, setPaymentState] = useState("");
   const [search, setSearch] = useState("");
+  const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null);
 
   const query = useTransactions({
     apiKey,
     connectionId,
     requestState,
     paymentState,
+  });
+  const attemptsQuery = useExecutionAttempts({
+    apiKey,
+    connectionId,
+    toolCallId: expandedTransactionId,
   });
 
   useEffect(() => {
@@ -160,6 +166,9 @@ export function TransactionActivity() {
         queryClient.removeQueries({
           queryKey: ["transactions", activeConnectionId],
         });
+        queryClient.removeQueries({
+          queryKey: ["execution-attempts", activeConnectionId],
+        });
       }
     };
   }, [connectionId, queryClient]);
@@ -167,17 +176,20 @@ export function TransactionActivity() {
   function connect(key: string) {
     setApiKey(key);
     setConnectionId(globalThis.crypto.randomUUID());
+    setExpandedTransactionId(null);
   }
 
   function disconnect() {
     if (connectionId) {
       queryClient.removeQueries({ queryKey: ["transactions", connectionId] });
+      queryClient.removeQueries({ queryKey: ["execution-attempts", connectionId] });
     }
     setApiKey("");
     setConnectionId("");
     setRequestState("");
     setPaymentState("");
     setSearch("");
+    setExpandedTransactionId(null);
   }
 
   const normalizedSearch = search.trim().toLowerCase();
@@ -346,43 +358,156 @@ export function TransactionActivity() {
                       <th scope="col">Payment state</th>
                       <th scope="col">Execution state</th>
                       <th scope="col">Created</th>
+                      <th scope="col">
+                        <span className="settlement-visually-hidden">Details</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactions.map((transaction) => (
-                      <tr key={transaction.id}>
-                        <td>
-                          <code className="transaction-id" title={transaction.id}>
-                            {shortId(transaction.id)}
-                          </code>
-                        </td>
-                        <td>
-                          <code className="transaction-id" title={transaction.agent_id}>
-                            {shortId(transaction.agent_id)}
-                          </code>
-                        </td>
-                        <td className="transaction-capability">
-                          {transaction.capability}
-                        </td>
-                        <td>
-                          <span className={`status ${stateTone(transaction.request_state)}`}>
-                            {stateLabel(transaction.request_state)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`status ${stateTone(transaction.payment_state)}`}>
-                            {stateLabel(transaction.payment_state)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`status ${stateTone(transaction.execution_state)}`}>
-                            {stateLabel(transaction.execution_state)}
-                          </span>
-                        </td>
-                        <td className="transaction-date">
-                          {displayDate(transaction.created_at)}
-                        </td>
-                      </tr>
+                      <Fragment key={transaction.id}>
+                        <tr>
+                          <td>
+                            <code className="transaction-id" title={transaction.id}>
+                              {shortId(transaction.id)}
+                            </code>
+                          </td>
+                          <td>
+                            <code className="transaction-id" title={transaction.agent_id}>
+                              {shortId(transaction.agent_id)}
+                            </code>
+                          </td>
+                          <td className="transaction-capability">
+                            {transaction.capability}
+                          </td>
+                          <td>
+                            <span className={`status ${stateTone(transaction.request_state)}`}>
+                              {stateLabel(transaction.request_state)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status ${stateTone(transaction.payment_state)}`}>
+                              {stateLabel(transaction.payment_state)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status ${stateTone(transaction.execution_state)}`}>
+                              {stateLabel(transaction.execution_state)}
+                            </span>
+                          </td>
+                          <td className="transaction-date">
+                            {displayDate(transaction.created_at)}
+                          </td>
+                          <td>
+                            <button
+                              className="button transaction-details-button"
+                              type="button"
+                              aria-expanded={expandedTransactionId === transaction.id}
+                              aria-controls={
+                                expandedTransactionId === transaction.id
+                                  ? `attempts-${transaction.id}`
+                                  : undefined
+                              }
+                              onClick={() =>
+                                setExpandedTransactionId((current) =>
+                                  current === transaction.id ? null : transaction.id,
+                                )
+                              }
+                            >
+                              {expandedTransactionId === transaction.id
+                                ? "Hide attempts"
+                                : "Details"}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedTransactionId === transaction.id ? (
+                          <tr>
+                            <td id={`attempts-${transaction.id}`} colSpan={8}>
+                              <div className="execution-attempt-panel">
+                                {transaction.execution_state === "unknown" ? (
+                                  <div className="execution-unknown-warning" role="note">
+                                    <strong>Outcome unknown.</strong> The provider may have completed this action.
+                                    Check the provider before retrying; PaxRelay will not replay it automatically.
+                                  </div>
+                                ) : null}
+                                <div className="execution-attempt-heading">
+                                  <h3>Provider attempts</h3>
+                                  <span className="card-meta">Operational metadata only</span>
+                                </div>
+                                {attemptsQuery.isPending ? (
+                                  <p role="status">Loading attempt detailsâ€¦</p>
+                                ) : attemptsQuery.isError ? (
+                                  <div role="alert" className="data-access-error">
+                                    Attempt details could not be loaded. Check your
+                                    transactions:read access and try again.
+                                  </div>
+                                ) : attemptsQuery.data?.length ? (
+                                  <div className="table-wrap">
+                                    <table className="data-table execution-attempt-table">
+                                      <thead>
+                                        <tr>
+                                          <th scope="col">Attempt</th>
+                                          <th scope="col">Provider</th>
+                                          <th scope="col">State</th>
+                                          <th scope="col">Forwarded</th>
+                                          <th scope="col">Response</th>
+                                          <th scope="col">Latency</th>
+                                          <th scope="col">HTTP</th>
+                                          <th scope="col">Provider error</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {attemptsQuery.data.map((attempt) => (
+                                          <tr key={attempt.id}>
+                                            <td>{attempt.attempt_number}</td>
+                                            <td>
+                                              <code
+                                                className="transaction-id"
+                                                title={attempt.provider_id}
+                                              >
+                                                {shortId(attempt.provider_id)}
+                                              </code>
+                                            </td>
+                                            <td>
+                                              <span
+                                                className={`status ${stateTone(attempt.execution_state)}`}
+                                              >
+                                                {stateLabel(attempt.execution_state)}
+                                              </span>
+                                            </td>
+                                            <td>
+                                              {attempt.request_forwarded_at
+                                                ? displayDate(attempt.request_forwarded_at)
+                                                : "â€”"}
+                                            </td>
+                                            <td>
+                                              {attempt.response_received_at
+                                                ? displayDate(attempt.response_received_at)
+                                                : "â€”"}
+                                            </td>
+                                            <td>
+                                              {attempt.latency_ms === null
+                                                ? "â€”"
+                                                : `${attempt.latency_ms} ms`}
+                                            </td>
+                                            <td>{attempt.http_status_code ?? "â€”"}</td>
+                                            <td>{attempt.provider_error_code ?? "â€”"}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <p>No provider attempts are recorded for this request.</p>
+                                )}
+                                <p className="execution-attempt-footnote">
+                                  Request contents, provider responses, and payment credentials are not included here.
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

@@ -38,6 +38,8 @@ from paxrelay_gateway.config import GatewaySettings, get_settings
 from paxrelay_gateway.middleware import RequestBodyLimitMiddleware
 from paxrelay_gateway.middleware.auth import AgentAuthError, resolve_agent
 from paxrelay_gateway.security.rate_limit import (
+    GatewayConcurrencyLimitExceeded,
+    GatewayConcurrencyLimitUnavailable,
     GatewayRateLimitExceeded,
     GatewayRateLimitUnavailable,
 )
@@ -223,6 +225,46 @@ def create_app() -> FastAPI:
             headers=_response_headers(request),
         )
 
+    @app.exception_handler(GatewayConcurrencyLimitExceeded)
+    async def _concurrency_limited_handler(
+        request: Request,
+        exc: GatewayConcurrencyLimitExceeded,
+    ) -> JSONResponse:
+        headers = _response_headers(request)
+        headers.update(
+            {
+                "Retry-After": "1",
+                "X-Gateway-Concurrency-Limit": str(exc.limit),
+                "X-Gateway-Concurrency-In-Flight": str(exc.in_flight),
+            }
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": {
+                    "code": "concurrency_limited",
+                    "message": "The gateway concurrent request limit has been reached.",
+                }
+            },
+            headers=headers,
+        )
+
+    @app.exception_handler(GatewayConcurrencyLimitUnavailable)
+    async def _concurrency_limit_unavailable_handler(
+        request: Request,
+        _: GatewayConcurrencyLimitUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "code": "concurrency_limiter_unavailable",
+                    "message": "The gateway cannot verify its concurrency limit right now.",
+                }
+            },
+            headers=_response_headers(request),
+        )
+
     @app.post("/v1/invoke")
     async def invoke(
         request: Request,
@@ -318,6 +360,7 @@ def _response_headers(request: Request) -> dict[str, str]:
     """Attach no-store and any authenticated-key rate-limit metadata."""
     headers = {"Cache-Control": "no-store"}
     headers.update(getattr(request.state, "gateway_rate_limit_headers", {}))
+    headers.update(getattr(request.state, "gateway_concurrency_headers", {}))
     return headers
 
 

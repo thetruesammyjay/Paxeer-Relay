@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paxrelay_domain import (
     Agent,
     Environment,
+    ExecutionState,
     Policy,
     PolicyAssignment,
     PolicyMode,
@@ -24,7 +25,8 @@ from paxrelay_domain import (
 )
 from paxrelay_db.models.agents import AgentModel
 from paxrelay_db.models.budget import BudgetReservationModel
-from paxrelay_db.models.payments import PaymentModel
+from paxrelay_db.models.executions import ExecutionAttemptModel
+from paxrelay_db.models.payments import PaymentModel, ToolCallModel
 from paxrelay_db.models.policies import PolicyAssignmentModel, PolicyModel
 from paxrelay_db.repositories._common import as_uuid, sid
 
@@ -223,3 +225,50 @@ class SqlAlchemyPolicyRepository:
             agent_id,
             datetime.utcnow() - timedelta(days=30),
         )
+
+    async def get_consecutive_failures(
+        self,
+        agent_id: UUID,
+        *,
+        limit: int,
+    ) -> int:
+        """Count recent failed provider attempts after the last success.
+
+        The result is capped at ``limit`` because the policy evaluator only
+        needs to know whether the configured threshold has been reached.
+        In-flight and pre-provider failures are excluded from this history.
+        """
+        if limit < 1:
+            return 0
+        terminal_states = (
+            ExecutionState.SUCCEEDED.value,
+            ExecutionState.PROVIDER_ERROR.value,
+            ExecutionState.TIMEOUT.value,
+            ExecutionState.UNKNOWN.value,
+        )
+        stmt = (
+            select(ExecutionAttemptModel.execution_state)
+            .join(
+                ToolCallModel,
+                ToolCallModel.id == ExecutionAttemptModel.tool_call_id,
+            )
+            .where(
+                ToolCallModel.agent_id == sid(agent_id),
+                ExecutionAttemptModel.response_received_at.is_not(None),
+                ExecutionAttemptModel.execution_state.in_(terminal_states),
+            )
+            .order_by(
+                ExecutionAttemptModel.response_received_at.desc(),
+                ExecutionAttemptModel.created_at.desc(),
+                ExecutionAttemptModel.attempt_number.desc(),
+                ExecutionAttemptModel.id.desc(),
+            )
+            .limit(limit)
+        )
+        states = (await self._session.execute(stmt)).scalars().all()
+        failures = 0
+        for execution_state in states:
+            if execution_state == ExecutionState.SUCCEEDED.value:
+                break
+            failures += 1
+        return failures

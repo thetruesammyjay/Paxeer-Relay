@@ -14,6 +14,22 @@ export interface Transaction {
   updated_at: string;
 }
 
+export interface ExecutionAttempt {
+  id: string;
+  tool_call_id: string;
+  provider_id: string;
+  service_version_id: string;
+  attempt_number: number;
+  execution_state: string;
+  request_forwarded_at: string | null;
+  response_received_at: string | null;
+  latency_ms: number | null;
+  http_status_code: number | null;
+  provider_error_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface TransactionFilters {
   apiKey: string;
   connectionId: string;
@@ -45,5 +61,27 @@ export function useTransactions({
     staleTime: 10_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+  });
+}
+
+/** Load bounded operational metadata for one tenant-owned transaction. */
+export function useExecutionAttempts({
+  apiKey,
+  connectionId,
+  toolCallId,
+}: {
+  apiKey: string;
+  connectionId: string;
+  toolCallId: string | null;
+}) {
+  return useQuery({
+    queryKey: ["execution-attempts", connectionId, toolCallId],
+    queryFn: ({ signal }) =>
+      apiFetch<ExecutionAttempt[]>(
+        `/v1/transactions/${encodeURIComponent(toolCallId!)}/execution-attempts?limit=100`,
+        { token: apiKey, signal, cache: "no-store" },
+      ),
+    enabled: Boolean(apiKey && connectionId && toolCallId),
+    staleTime: 10_000,
   });
 }

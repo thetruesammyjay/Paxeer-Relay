@@ -57,6 +57,10 @@ async def create_policy(
         allowed_capabilities=body.allowed_capabilities,
         allowed_providers=body.allowed_providers,
         blocked_providers=body.blocked_providers,
+        minimum_provider_reputation=body.minimum_provider_reputation,
+        minimum_provider_success_rate=body.minimum_provider_success_rate,
+        maximum_accepted_latency_ms=body.maximum_accepted_latency_ms,
+        maximum_consecutive_failures=body.maximum_consecutive_failures,
         approval_threshold=_money_to_atomic(body.approval_threshold),
     )
     policy = Policy(

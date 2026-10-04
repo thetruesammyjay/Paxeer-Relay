@@ -101,11 +101,14 @@ uv run --package paxrelay-worker python -m paxrelay_worker
 
 The gateway and worker default to their mock Paxeer adapter. The simulator
 fabricates payment and settlement results. The worker expires policy approvals,
-fans supported outbox events into delivery rows, sends signed webhooks, and
-reconciles local payment facts with LayerX transaction reads. It supports
+marks abandoned paid executions as unknown without retrying them, fans supported
+outbox events into delivery rows, sends signed webhooks, and reconciles local
+payment facts with LayerX transaction reads. It supports
 settlement and batch reads through a separately configured adapter endpoint.
 Provider health probes and routing-metric indexing are implemented; worker
-analytics materialization remains unfinished. Staging and production require
+analytics materialization is implemented as hourly and daily spend rollups.
+The worker exposes internal liveness and readiness endpoints on port 8081 by
+default; keep that port private to the deployment network. Staging and production require
 `USE_MOCK_ADAPTER=false` and exact provider hostnames in
 `PROVIDER_ENDPOINT_HOST_ALLOWLIST`. This keeps staging on the configured
 network adapter and limits provider requests to approved hosts. Staging must
@@ -133,7 +136,14 @@ include:
 | `GATEWAY_RATE_LIMIT_MAX_REQUESTS` | Gateway | Maximum requests per key per window; defaults to 120. |
 | `GATEWAY_RATE_LIMIT_WINDOW_SECONDS` | Gateway | Fixed-window duration; defaults to 60 seconds. |
 | `GATEWAY_RATE_LIMIT_ENABLED` | Gateway | Optional override for development/staging. Production cannot disable rate limiting. |
+| `GATEWAY_MAX_CONCURRENT_REQUESTS_PER_KEY` | Gateway | Maximum in-flight authenticated requests per API key; defaults to 10 when gateway Redis limits are enabled. |
+| `GATEWAY_CONCURRENCY_LEASE_SECONDS` | Gateway | Recovers in-flight slots after a crashed request; defaults to 600 seconds and must exceed the provider timeout plus payment-verification allowance. |
 | `PROVIDER_ENDPOINT_HOST_ALLOWLIST` | Gateway and worker | Comma-separated exact hostnames that provider URLs may target. Required in staging and production; wildcard entries are not supported. |
+| `WORKER_HEALTH_HOST` | Worker | Bind address for internal `/health` and `/ready`; defaults to `0.0.0.0`. Keep the listener private to the deployment network. |
+| `WORKER_HEALTH_PORT` | Worker | Internal health listener port; defaults to `8081`. |
+| `EXECUTION_RECOVERY_INTERVAL_SECONDS` | Worker | Scan interval for paid attempts abandoned by a stopped gateway; defaults to 60 seconds. |
+| `EXECUTION_RECOVERY_STALE_SECONDS` | Worker | Age before a reserved or running attempt is marked unknown; defaults to 300 seconds and must be at least 180. |
+| `EXECUTION_RECOVERY_BATCH_SIZE` | Worker | Maximum stale attempts recovered per scan; defaults to 100. |
 | `API_MAX_REQUEST_BYTES` | Control-plane API | Maximum write-request body size; defaults to 1 MiB and can be set from 1 KiB to 10 MiB. |
 | `GATEWAY_MAX_REQUEST_BYTES` | Gateway | Maximum invocation request body; defaults to 1 MiB and can be set from 1 KiB to 10 MiB. |
 | `GATEWAY_MAX_RESPONSE_BYTES` | Gateway | Maximum provider response body; defaults to 10 MiB and can be set from 1 KiB to 100 MiB. |

@@ -38,7 +38,13 @@ The gateway also limits authenticated API keys in staging and production,
 defaulting to 120 requests per 60 seconds. Configure it with
 `GATEWAY_RATE_LIMIT_MAX_REQUESTS` and
 `GATEWAY_RATE_LIMIT_WINDOW_SECONDS`. It fails closed with HTTP 503 if Redis is
-unavailable. Invalid or unauthenticated requests still need an edge limit.
+unavailable. It also limits each authenticated key to 10 in-flight requests by
+default, configurable with `GATEWAY_MAX_CONCURRENT_REQUESTS_PER_KEY`. The
+gateway releases a slot when the request finishes; a 600-second Redis lease
+recovers slots after a process failure. Concurrent-limit responses use HTTP
+429 with `Retry-After` and `X-Gateway-Concurrency-*` headers. If Redis cannot
+enforce the cap, requests fail closed with HTTP 503. Invalid or unauthenticated
+requests still need an edge limit.
 
 Write request bodies are limited to 1 MiB by default. Set
 `API_MAX_REQUEST_BYTES` to adjust the cap; its allowed range is 1 KiB to 10 MiB.
@@ -99,7 +105,7 @@ scope set grants no access.
 | --- | --- | --- |
 | `agents` | List/get agents and read wallets | Create agents |
 | `providers` | List/get providers | Create providers |
-| `services` | List/get services | Publish services |
+| `services` | List/get services | Publish, pause, and resume services |
 | `policies` | List/get policies | Create policies and assign them |
 | `approvals` | List approval requests | Approve or reject pending requests |
 | `api-keys` | List key metadata | Create and revoke keys |
@@ -147,9 +153,10 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 | `POST /providers` | Register a provider in the current project; requires `providers:write`. |
 | `GET /providers` | List providers; supports `status`, `search`, `limit` (1–100, default 100), and `offset`. |
 | `GET /providers/{provider_id}` | Get one provider. |
-| `POST /services/providers/{provider_id}` | Publish a service for a provider and create its initial immutable version and metrics. |
+| `POST /services/providers/{provider_id}` | Publish a service for a provider; requires `services:write` and creates its initial immutable version and metrics. |
 | `GET /services` | List services in the current project. |
 | `GET /services/{service_id}` | Get one service. |
+| `PATCH /services/{service_id}/status` | Pause or resume a service for new routes; requires `services:write`. |
 
 Service create bodies contain `name`, `slug`, `capability`, `protocols`,
 `price_per_call`, `base_url`, `endpoint_url`, `version`, and optional
@@ -166,6 +173,14 @@ checks it again before forwarding, pins the connection to the checked IP, and
 does not follow redirects. In development and test environments, private
 addresses and HTTP are allowed for local simulators.
 
+Service responses include the configured health-check path and interval plus
+the latest worker observation (`last_check_at`, `last_check_passing`,
+`consecutive_health_failures`, and `last_check_status_code`). Before the first
+probe, `last_check_at` and `last_check_passing` are `null`. A newly published
+service is not eligible for routing until a health probe passes. Provider
+selection is scoped to the agent's environment and excludes inactive
+providers.
+
 Production providers must have a valid payment wallet address before their
 services can be used for paid calls. The gateway also requires one whenever the
 live payment adapter is enabled. Mock-only development can use the demo
@@ -173,6 +188,17 @@ destination.
 
 Provider creation accepts an optional `website_url` limited to HTTP(S). The
 provider response includes that URL along with the registered profile fields.
+
+Pause or resume a service with `{"status":"inactive"}` or
+`{"status":"active"}`. The update is tenant- and environment-scoped, and a
+deprecated service cannot be changed through this route. Repeating the current status is safe and
+does not create another audit or webhook event. Pausing removes the service
+from new routing. An unexpired quote that was already issued may still be
+completed while the provider remains active and healthy, so an agent may still
+make that paid request until the quote expires. The status change does not
+reverse a payment already sent outside PaxRelay. A
+`service.disabled` or `service.enabled` event is added to the transactional
+outbox when the status changes.
 
 ### Policies
 
@@ -185,7 +211,16 @@ provider response includes that URL along with the registered profile fields.
 
 The create body accepts `mode`, `maximum_per_call`, `daily_budget`,
 `monthly_budget`, `allowed_capabilities`, `allowed_providers`,
-`blocked_providers`, and `approval_threshold`. Monetary amounts use
+`blocked_providers`, `minimum_provider_reputation`,
+`minimum_provider_success_rate`, `maximum_accepted_latency_ms`,
+`maximum_consecutive_failures`, and `approval_threshold`. Provider reputation
+and success thresholds are numbers from 0 to 1; latency is a whole number from
+0 to 600000 milliseconds; the failure threshold is an integer from 1 to 1000.
+The gateway counts completed provider attempts after the agent's latest
+successful attempt. Reaching the threshold blocks subsequent calls until the
+agent is assigned a policy without that limit. The gateway compares provider
+quality thresholds with the selected service's indexed metrics. Monetary
+amounts use
 `{"amount_atomic":1230000,"currency":"USDX","decimals":6}`. Allowed modes
 are `observe`, `warn`, and `enforce`. The list and create routes return policy
 metadata; the detail route returns the complete rule configuration and current
@@ -281,6 +316,7 @@ project, the key request is:
 | Method and path | Purpose and filters |
 | --- | --- |
 | `GET /transactions` | Filter by `agent_id`, `request_state`, `payment_state`, `created_after`, and `created_before`; `limit` defaults to 50 and is capped at 100. |
+| `GET /transactions/{tool_call_id}/execution-attempts` | Tenant-scoped attempt history; `limit` defaults to 100 (maximum 100), with `offset` pagination. Returns attempt state, provider and service-version IDs, timestamps, latency, HTTP status, and provider error code. |
 | `GET /receipts` | Filter by `agent_id` or `tool_call_id`; `limit` defaults to 50 and is capped at 100. |
 | `GET /receipt-keys` | Public version 1 manifest of receipt verification keys. |
 | `GET /analytics/spend` | One spend aggregate for `period=daily` or `period=monthly` and an optional `start_date` / `end_date` range. |
@@ -291,6 +327,14 @@ tenant-owned tool call. It returns receipt summaries, not the complete
 canonical receipt. `payment_amount` is an integer in atomic currency units;
 receipt hash, signature, and signing-key fields can be absent. Listing records
 does not verify their signatures.
+
+`GET /transactions/{tool_call_id}/execution-attempts` requires
+`transactions:read`. It first verifies that the transaction belongs to the
+current organisation, project, and environment, then returns bounded attempt
+metadata in attempt order. It does not return request or response contents,
+payment credentials, or payment proofs. If an attempt is `unknown`, check the
+provider's records before deciding whether to retry; the gateway does not
+automatically replay an action with an unknown outcome.
 
 Analytics defaults to the previous 30 days. `start_date` must precede
 `end_date`. Spend counts payment states `verified`, `settled_layerx`, and
@@ -374,8 +418,11 @@ secret. Send a new `secret` in a PATCH to rotate it. Audited control-plane
 changes with public event types and approval expiration are stored in the
 transactional outbox and fanned into durable delivery rows. Currently emitted
 types are `agent.created`, `provider.created`, `policy.created`,
-`service.published`, `approval.approved`, `approval.rejected`, and
-`approval.expired`. The worker sends each event with
+`service.published`, `service.disabled`, `service.enabled`,
+`approval.approved`, `approval.rejected`, and
+`approval.expired`. The worker can also emit `call.recovery.required` when it
+marks a paid provider attempt unknown after a gateway interruption. The worker
+sends each event with
 `X-PaxRelay-Signature: sha256=<hex>`, an HMAC-SHA256 of
 `<unix-timestamp>.<delivery-id>.<event-type>.<raw-request-body>`. It includes
 timestamp, event type, event ID, and delivery ID headers. Receivers should use constant-time signature

@@ -1,10 +1,11 @@
 # MCP integration
 
-Model Context Protocol (MCP) support is part of PaxRelay's product direction,
-but usable MCP adapters are not implemented in the current checkout. The
-Python MCP package contains empty module files, and the TypeScript MCP package
-is absent. The gateway currently exposes a generic HTTP JSON invocation rather
-than an MCP server or client.
+The Python package `packages/mcp-python` implements the agent-facing MCP
+adapter. It exposes configured PaxRelay capabilities as MCP tools, requests
+quotes through the gateway, and returns the result and receipt as structured
+tool output. Payment proof remains with the host application's wallet flow.
+The gateway currently forwards provider calls over HTTP; provider-side MCP
+transport is not implemented. The TypeScript MCP package is also absent.
 
 ## Intended integration shape
 
@@ -70,13 +71,31 @@ It returns a 402 requirement before service execution. This HTTP flow is the
 current integration boundary; it is not an MCP transport implementation. Use
 the API and protocol references for the exact request and proof fields.
 
-## Implementation sequence
+## Current implementation
 
-1. Restore and implement the Python provider and client package modules.
-2. Add a tool manifest mapping and stable capability naming rules.
-3. Define how 402 challenges and payment errors map to MCP tool responses.
-4. Add cancellation and timeout behavior without losing payment state.
-5. Add integration examples against `apps/simulator` and a fake MCP server.
-6. Add a TypeScript implementation only after the wire contract is stable.
-7. Document package support and installation only after publishable packages
-   exist. The current repository does not publish `paxrelay` or an MCP CLI.
+`paxrelay-mcp` provides `PaidToolDefinition`, a `@paid_tool` manifest
+decorator, `PaxRelayMCPAdapter`, a low-level MCP server factory, a stdio runner,
+and a managed gateway-client lifespan helper. The server publishes each
+configured input JSON Schema as declared, advertises a schema for its
+structured outcomes, and validates arguments again before invoking the
+gateway. It validates local JSON Schema references and rejects remote
+references. It maps approval, payment, provider, and gateway outcomes into a
+structured response. By default, the server derives an idempotency key from
+the MCP session, tool name, and request ID. Configure a durable key factory
+for retries that cross a reconnect or server restart. The adapter never
+retries a request automatically.
+
+If no proof provider is configured, a tool call returns the 402 payment
+requirement for the host to process separately. An optional async proof
+provider lets the host handle payment during the same MCP call without giving
+PaxRelay wallet keys. The package does not submit transfers itself.
+
+## Remaining implementation sequence
+
+1. Add versioned MCP provider metadata and dispatch MCP service versions from
+   the gateway after payment verification.
+2. Add adapter integration against a fake MCP server and simulator, including
+   cancellation, timeout, and proof-replay cases.
+3. Add a TypeScript adapter after the Python wire contract is stable.
+4. Publish the Python package only after its API and install instructions are
+   stable; it is currently a workspace package.

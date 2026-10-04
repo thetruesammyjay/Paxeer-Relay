@@ -35,11 +35,46 @@ function parseList(value: string) {
   return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))];
 }
 
+function parseUnitInterval(value: string, label: string): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!/^(?:0(?:\.\d{1,6})?|1(?:\.0{1,6})?)$/.test(normalized)) {
+    throw new Error(`${label} must be between 0 and 1.`);
+  }
+  return Number(normalized);
+}
+
+function parseLatency(value: string): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error("Maximum latency must be a whole number of milliseconds.");
+  }
+  const milliseconds = Number(normalized);
+  if (!Number.isSafeInteger(milliseconds) || milliseconds > 600_000) {
+    throw new Error("Maximum latency must be between 0 and 600000 milliseconds.");
+  }
+  return milliseconds;
+}
+
+function parseFailureThreshold(value: string): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error("Maximum consecutive failures must be a whole number.");
+  }
+  const threshold = Number(normalized);
+  if (!Number.isSafeInteger(threshold) || threshold < 1 || threshold > 1000) {
+    throw new Error("Maximum consecutive failures must be between 1 and 1000.");
+  }
+  return threshold;
+}
+
 function createErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 401) return "The API key was not accepted. Check it and try again.";
     if (error.status === 403) return "This key needs policies:write access to create policies.";
-    if (error.status === 422) return "The policy contains an invalid capability, amount, mode, or provider entry.";
+    if (error.status === 422) return "The policy contains an invalid capability, amount, provider, or threshold.";
     return `Policy creation failed (HTTP ${error.status}). Try again shortly.`;
   }
   if (error instanceof Error) return error.message;
@@ -61,6 +96,10 @@ export function PolicyCreateForm({ apiKey, onCreated }: PolicyCreateFormProps) {
   const [allowedCapabilities, setAllowedCapabilities] = useState("");
   const [allowedProviders, setAllowedProviders] = useState("");
   const [blockedProviders, setBlockedProviders] = useState("");
+  const [minimumReputation, setMinimumReputation] = useState("");
+  const [minimumSuccessRate, setMinimumSuccessRate] = useState("");
+  const [maximumLatency, setMaximumLatency] = useState("");
+  const [maximumFailures, setMaximumFailures] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,6 +118,16 @@ export function PolicyCreateForm({ apiKey, onCreated }: PolicyCreateFormProps) {
         allowed_capabilities: parseList(allowedCapabilities),
         allowed_providers: parseList(allowedProviders),
         blocked_providers: parseList(blockedProviders),
+        minimum_provider_reputation: parseUnitInterval(
+          minimumReputation,
+          "Minimum provider reputation",
+        ),
+        minimum_provider_success_rate: parseUnitInterval(
+          minimumSuccessRate,
+          "Minimum provider success rate",
+        ),
+        maximum_accepted_latency_ms: parseLatency(maximumLatency),
+        maximum_consecutive_failures: parseFailureThreshold(maximumFailures),
       };
       const created = await createPolicy(apiKey, input);
       setName("");
@@ -90,6 +139,10 @@ export function PolicyCreateForm({ apiKey, onCreated }: PolicyCreateFormProps) {
       setAllowedCapabilities("");
       setAllowedProviders("");
       setBlockedProviders("");
+      setMinimumReputation("");
+      setMinimumSuccessRate("");
+      setMaximumLatency("");
+      setMaximumFailures("");
       setOpen(false);
       setSuccessMessage(`Created “${created.name}”.`);
       onCreated();
@@ -121,8 +174,8 @@ export function PolicyCreateForm({ apiKey, onCreated }: PolicyCreateFormProps) {
             <div>
               <h2 className="card-title">New spending policy</h2>
               <p className="card-description">
-                Set exact USDX limits and optional capability or provider boundaries.
-                Empty allow lists mean no restriction.
+                Set exact USDX limits, access boundaries, and provider quality
+                thresholds. Empty allow lists mean no restriction.
               </p>
             </div>
           </header>
@@ -240,6 +293,65 @@ export function PolicyCreateForm({ apiKey, onCreated }: PolicyCreateFormProps) {
                 placeholder="Optional"
               />
             </label>
+            <label className="policy-form-field">
+              <span>Minimum provider reputation (0 to 1)</span>
+              <input
+                className="search"
+                type="number"
+                min="0"
+                max="1"
+                step="0.000001"
+                value={minimumReputation}
+                onChange={(event) => setMinimumReputation(event.target.value)}
+                placeholder="No minimum"
+              />
+            </label>
+            <label className="policy-form-field">
+              <span>Minimum provider success rate (0 to 1)</span>
+              <input
+                className="search"
+                type="number"
+                min="0"
+                max="1"
+                step="0.000001"
+                value={minimumSuccessRate}
+                onChange={(event) => setMinimumSuccessRate(event.target.value)}
+                placeholder="No minimum"
+              />
+            </label>
+            <label className="policy-form-field">
+              <span>Maximum average latency (milliseconds)</span>
+              <input
+                className="search"
+                type="number"
+                min="0"
+                max="600000"
+                step="1"
+                value={maximumLatency}
+                onChange={(event) => setMaximumLatency(event.target.value)}
+                placeholder="No maximum"
+              />
+            </label>
+            <label className="policy-form-field">
+              <span>Block new calls after consecutive provider failures</span>
+              <input
+                className="search"
+                type="number"
+                min="1"
+                max="1000"
+                step="1"
+                value={maximumFailures}
+                onChange={(event) => setMaximumFailures(event.target.value)}
+                placeholder="No failure limit"
+              />
+            </label>
+            <p className="policy-form-hint policy-form-wide">
+              Reputation and success rate use a 0 to 1 scale. For example,
+              enter 0.8 for 80%. Latency is checked against the selected
+              provider&apos;s rolling average. Failure limits count completed
+              provider attempts since the agent&apos;s last successful attempt.
+              Once reached, use a policy without this limit to restore calls.
+            </p>
             {error ? (
               <p className="form-error policy-form-wide" role="alert">
                 {error}

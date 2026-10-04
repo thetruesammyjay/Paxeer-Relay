@@ -9,11 +9,18 @@ export interface ServicePrice {
   decimals: number;
 }
 
-export interface ServiceHealthSettings {
+export interface ServiceHealthConfig {
   endpoint: string;
   interval_seconds: number;
   timeout_seconds: number;
   failure_threshold: number;
+}
+
+export interface ServiceHealthSettings extends ServiceHealthConfig {
+  last_check_at?: string | null;
+  last_check_passing?: boolean | null;
+  consecutive_health_failures?: number;
+  last_check_status_code?: number | null;
 }
 
 export interface ServiceRecord {
@@ -27,6 +34,21 @@ export interface ServiceRecord {
   base_url: string | null;
   price_per_call: ServicePrice | null;
   health: ServiceHealthSettings;
+  description: string | null;
+}
+
+export type ServiceProtocolName = "http" | "mcp" | "grpc";
+
+export interface ServiceCreateInput {
+  name: string;
+  slug: string;
+  capability: string;
+  protocols: ServiceProtocolName[];
+  price_per_call: ServicePrice;
+  base_url: string;
+  endpoint_url: string;
+  health: ServiceHealthConfig;
+  version: string;
   description: string | null;
 }
 
@@ -46,4 +68,43 @@ export function useServices(token: string, connectionId: string) {
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
+}
+
+export function publishService(
+  token: string,
+  providerId: string,
+  input: ServiceCreateInput,
+) {
+  // Keep the USDX amount exact when converting the browser form to JSON.
+  const body = JSON.stringify(input).replace(
+    /"amount_atomic":"(\d+)"/,
+    '"amount_atomic":$1',
+  );
+  return apiFetch<ServiceRecord>(
+    `/v1/services/providers/${encodeURIComponent(providerId)}`,
+    {
+      method: "POST",
+      token,
+      body,
+      cache: "no-store",
+      integerFieldsAsStrings: ["amount_atomic"],
+    },
+  );
+}
+
+export function updateServiceStatus(
+  token: string,
+  serviceId: string,
+  status: "active" | "inactive",
+) {
+  return apiFetch<ServiceRecord>(
+    `/v1/services/${encodeURIComponent(serviceId)}/status`,
+    {
+      method: "PATCH",
+      token,
+      body: JSON.stringify({ status }),
+      cache: "no-store",
+      integerFieldsAsStrings: ["amount_atomic"],
+    },
+  );
 }

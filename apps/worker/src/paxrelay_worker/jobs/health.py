@@ -217,7 +217,7 @@ class HealthCheckJob(BaseJob):
                     health_failures += 1
                 health.update(
                     {
-                        "last_check_at": checked_at.isoformat(),
+                        "last_check_at": f"{checked_at.isoformat()}Z",
                         "last_check_passing": result.passed,
                         "consecutive_health_failures": health_failures,
                         "last_check_status_code": result.status_code,
@@ -250,7 +250,9 @@ class HealthCheckJob(BaseJob):
                 old_availability = float(metrics.availability_score or 0.0)
                 observation = 1.0 if result.passed else 0.0
                 metrics.availability_score = (
-                    (1.0 - self.availability_alpha) * old_availability
+                    observation
+                    if last_checked is None
+                    else (1.0 - self.availability_alpha) * old_availability
                     + self.availability_alpha * observation
                 )
                 metrics.measured_at = checked_at

@@ -6,7 +6,7 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, AsyncIterator
 from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, Header, Request, Response
@@ -19,7 +19,11 @@ from paxrelay_db import ApiKey, Organisation, Project, get_engine, get_session
 from paxrelay_db.repositories import SqlAlchemyAgentRepository
 from paxrelay_db.repositories._common import sid
 from paxrelay_gateway.config import get_settings
-from paxrelay_gateway.security.rate_limit import enforce_gateway_key_limit
+from paxrelay_gateway.security.rate_limit import (
+    acquire_gateway_key_slot,
+    enforce_gateway_key_limit,
+    release_gateway_key_slot,
+)
 
 _bearer = HTTPBearer(auto_error=False)
 _KEY_PREFIX_LEN = len("pk_") + 8
@@ -43,7 +47,7 @@ async def resolve_agent(
     x_agent_id: Annotated[str | None, Header()] = None,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: AsyncSession = Depends(get_session),
-) -> Agent:
+) -> AsyncIterator[Agent]:
     """Authenticate a gateway key, then resolve an agent inside its tenant."""
     if credentials is None:
         raise AgentAuthError(401, "Invalid or expired API key.")
@@ -135,6 +139,18 @@ async def resolve_agent(
     if agent.status != AgentStatus.ACTIVE:
         raise AgentAuthError(403, "Agent is not active.")
 
+    key_id = UUID(str(key.id))
+    project_id = UUID(str(key.project_id))
+    request.state.gateway_api_key_id = key_id
+    request.state.gateway_project_id = project_id
+    concurrency_token = await acquire_gateway_key_slot(
+        request=request,
+        key_id=key_id,
+        project_id=project_id,
+        environment=key.environment,
+        settings=settings,
+    )
+
     # Update usage in a separate transaction after the response. Keeping this
     # out of the paid-call transaction avoids holding the key row during a
     # potentially slow provider request.
@@ -149,9 +165,17 @@ async def resolve_agent(
             used_at=now.replace(tzinfo=None),
         )
 
-    request.state.gateway_api_key_id = UUID(str(key.id))
-    request.state.gateway_project_id = UUID(str(key.project_id))
-    return agent
+    try:
+        yield agent
+    finally:
+        await release_gateway_key_slot(
+            request=request,
+            key_id=key_id,
+            project_id=project_id,
+            environment=key.environment,
+            token=concurrency_token,
+            settings=settings,
+        )
 
 
 async def _record_key_use(*, key_id: str, used_at: datetime) -> None:

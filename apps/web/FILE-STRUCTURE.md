@@ -74,7 +74,9 @@ apps/web/
 │   ├── provider-create-form.tsx         # Register provider details and copy its ID
 │   ├── provider-directory.tsx          # Scoped provider registration, live records, filters, and website links
 │   ├── receipt-directory.tsx           # Scoped receipt summaries and signature evidence
-│   ├── service-directory.tsx           # Scoped live services, prices, protocols, and probe settings
+│   ├── service-publish-form.tsx         # Publish service, provider, pricing, protocol, and health settings
+│   ├── service-directory.tsx           # Scoped services, prices, protocols, and latest health result
+│   ├── service-status-control.tsx       # Confirmed tenant service pause/resume with quote-expiry explanation
 │   ├── reveal.tsx                     # Reduced-motion-aware scroll reveals
 │   ├── scoped-api-key-access.tsx       # In-memory scoped API key entry
 │   ├── settlement-review.tsx          # Reconciliation queue and evidence details
@@ -88,7 +90,7 @@ apps/web/
 │   ├── use-policies.ts                # Session-scoped policy list, detail, and mutation calls
 │   ├── use-providers.ts               # Session-scoped provider list and registration request
 │   ├── use-receipts.ts                # Session-scoped receipt list query
-│   ├── use-services.ts                # Session-scoped service list query
+│   ├── use-services.ts                # Session-scoped service query, publish, and status requests
 │   ├── use-settlement-reconciliation.ts # Typed reconciliation API query
 │   └── use-transactions.ts             # Session-scoped transaction API query
 ├── lib/
@@ -137,7 +139,8 @@ leaving the page clears those cached results.
 `app/policies/page.tsx` composes `components/policy-directory.tsx`, which uses
 `hooks/use-policies.ts` to read policy summaries with a `policies:read` key.
 `components/policy-create-form.tsx` creates policies with `policies:write`,
-exact USDX limits, a mode, and optional capability/provider lists.
+exact USDX limits, a mode, optional capability/provider lists, and provider
+reputation, success-rate, and average-latency thresholds.
 `components/policy-detail-row.tsx` loads one policy's complete rule set and
 current agent assignments on demand. It can assign a policy with
 `policies:write`; the operator copies an agent UUID from the Agents page.
@@ -159,9 +162,20 @@ filtering uses the latest returned records. Provider health and performance
 are not in this API response.
 `app/services/page.tsx` composes `components/service-directory.tsx`, which
 uses `hooks/use-services.ts` to list up to 100 recent services visible to a
-`services:read` key. Search, status, and protocol filters use that returned
-list. Prices retain their exact atomic-unit values, and the displayed health
-probe fields are configured settings rather than live probe results.
+`services:read` key. `components/service-publish-form.tsx` publishes a service
+for a copied provider UUID with `services:write`. It collects capability,
+protocols, exact USDX price, service URLs, version, description, and bounded
+health-check settings. The amount is converted to atomic units without passing
+through JavaScript floating point. Use HTTPS for staging and production; at
+invocation, the gateway checks URLs and the production host allowlist before
+forwarding. New services stay out of routing until the first health probe
+passes. The directory shows configured probe settings separately from the
+latest worker result, timestamp, and consecutive failure count. Search,
+status, and protocol filters use the returned list. A `services:write` key can
+pause or resume a service with `PATCH /v1/services/{service_id}/status`. The
+control confirms the change and explains that already-issued, unexpired quotes
+can still complete after a pause. Status updates refresh the tenant service
+list; deprecated services have no pause or resume action.
 `app/receipts/page.tsx` composes `components/receipt-directory.tsx`, which
 uses `hooks/use-receipts.ts` to read up to 100 tenant-scoped summaries with a
 `receipts:read` key. It preserves `payment_amount` as an exact integer and
@@ -192,7 +206,7 @@ preferences such as network defaults or receipt-retention settings.
 | `/approvals` | `app/approvals/page.tsx` | Reads up to 100 recent requests with `approvals:read`; approve/reject requires `approvals:write`, a confirmation step, and supports an optional audit note. |
 | `/transactions` | `app/transactions/page.tsx` | Reads up to 100 recent request records with request/payment state filters and a `transactions:read` key. |
 | `/providers` | `app/providers/page.tsx` | Reads up to 100 provider records with `providers:read`; registers providers with `providers:write`; supports search, lifecycle filters, verification filtering, and copying full provider IDs. Website links are limited to HTTP(S). Health and performance metrics are not returned by this endpoint. |
-| `/services` | `app/services/page.tsx` | Reads up to 100 recent service records with a `services:read` key; supports search, status, and protocol filters. Displays configured probe settings, not live health results. |
+| `/services` | `app/services/page.tsx` | Reads recent service records with `services:read`; publishes a service for a provider UUID and pauses/resumes a service with `services:write`; supports search, status, and protocol filters. Shows configured probe settings and the latest worker result, timestamp, and failure streak. |
 | `/receipts` | `app/receipts/page.tsx` | Reads up to 100 tenant-scoped receipt summaries with a `receipts:read` key; supports local search and execution-state filtering. Shows signature metadata but does not verify signatures. |
 | `/analytics` | `app/analytics/page.tsx` | Reads the last 30 days of spend and capability totals from the API with an `analytics:read` key. |
 | `/settings` | `app/settings/page.tsx` | Lists up to 100 project API keys with `api-keys:read`; create and revoke require `api-keys:write`. Newly created secrets are shown once in page memory. General workspace preferences are not exposed by the current API. |

@@ -226,6 +226,25 @@ directory after creation, and show safe HTTP(S) website links in the provider
 list. Do not present registration as ownership verification or as evidence of
 live service health.
 
+Services supports publishing a priced service for a registered provider with
+`services:write`; list access uses `services:read`. Use the copied provider
+UUID, and collect the service name and slug, capability, one or more supported
+protocols, exact USDX price, base URL, invocation endpoint, version, and health
+check settings. Keep USDX conversion exact to six decimal places. Explain that
+staging and production should use HTTPS, and that the gateway checks URLs and
+the production host allowlist at invocation. A published service record is
+not a payment. Show configured probe settings separately from the latest
+worker result, timestamp, and consecutive failure count. Newly published
+services remain out of routing until their first probe passes. Show the latest
+probe timestamp and failure streak in the service directory. A failed probe
+below the configured threshold does not necessarily mean the service has been
+removed from routing, so keep the service lifecycle status and probe result
+visually distinct. `services:write` users can pause or resume a service from
+the directory. Confirm the change in a focused dialog and explain that pause
+stops new routes while an already-issued, unexpired quote may still complete.
+Resume only makes the service eligible when its provider is active and its
+health probe passes. Keep the action unavailable for deprecated services.
+
 Policies supports creation of the rule fields accepted by the API, exact USDX
 limits, full rule inspection, and assignment to an agent by UUID. Keep rule
 details in an expandable row so operators can review a policy without losing

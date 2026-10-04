@@ -26,7 +26,6 @@ from paxrelay_domain import (
     ExecutionAttempt,
     ExecutionState,
     MonetaryAmount,
-    ProviderMetrics,
     Payment,
     PaymentIntent,
     PaymentState,
@@ -343,13 +342,18 @@ class GatewayInvokeService:
             best_svc = await providers.get_service(route.service_id)
             _best_ver = await providers.get_service_version(route.service_version_id)
             provider = await providers.get(route.provider_id)
+            best_metrics = await providers.get_metrics(route.service_id)
             if (
                 best_svc is None
                 or _best_ver is None
                 or provider is None
+                or best_metrics is None
+                or not best_metrics.health_check_passing
                 or not provider.is_operable()
                 or (self._require_provider_wallet and not provider.wallet_address)
                 or best_svc.status.value != "active"
+                or best_svc.environment != agent.environment
+                or provider.environment != agent.environment
                 or not _best_ver.is_active
                 or _best_ver.provider_id != route.provider_id
                 or best_svc.provider_id != route.provider_id
@@ -380,10 +384,6 @@ class GatewayInvokeService:
                     ),
                     tool_call_id=call.id,
                 )
-            best_metrics = await providers.get_metrics(route.service_id) or ProviderMetrics(
-                service_id=route.service_id,
-                provider_id=route.provider_id,
-            )
             price = MonetaryAmount(
                 amount_atomic=int(approval.amount_atomic),
                 currency=approval.currency,
@@ -405,7 +405,10 @@ class GatewayInvokeService:
             recipient = approval.recipient_address
         else:
             candidates = await providers.find_eligible_services(
-                capability, agent.organisation_id, agent.project_id
+                capability,
+                agent.organisation_id,
+                agent.project_id,
+                agent.environment.value,
             )
             if not candidates:
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
@@ -504,7 +507,11 @@ class GatewayInvokeService:
             policy.rules.daily_budget is not None
             or policy.rules.monthly_budget is not None
         )
-        if has_budget_limits and not await policy_repo.lock_agent_for_budget(
+        needs_agent_state_lock = (
+            has_budget_limits
+            or policy.rules.maximum_consecutive_failures is not None
+        )
+        if needs_agent_state_lock and not await policy_repo.lock_agent_for_budget(
             agent.id
         ):
             if approval is not None:
@@ -518,6 +525,12 @@ class GatewayInvokeService:
             )
         daily = await policy_repo.get_daily_spend(agent.id)
         monthly = await policy_repo.get_monthly_spend(agent.id)
+        consecutive_failures = 0
+        if policy.rules.maximum_consecutive_failures is not None:
+            consecutive_failures = await policy_repo.get_consecutive_failures(
+                agent.id,
+                limit=policy.rules.maximum_consecutive_failures,
+            )
         req = PolicyEvaluationRequest(
             agent_id=str(agent.id),
             capability=capability,
@@ -528,6 +541,7 @@ class GatewayInvokeService:
             provider_reputation=best_metrics.reputation_score,
             provider_success_rate=best_metrics.success_rate,
             provider_avg_latency_ms=best_metrics.avg_latency_ms,
+            consecutive_failures=consecutive_failures,
             agent_status=agent.status.value,
         )
         policy_to_evaluate = policy
@@ -681,6 +695,57 @@ class GatewayInvokeService:
         quote = await payments.get_quote_by_tool_call(call.id)
         if quote is None:
             return InvokeResult(status_code=404, body=_err("not_found", "quote_not_found"))
+        if call.request_state == RequestState.PAYMENT_REQUIRED and quote.is_expired():
+            return InvokeResult(
+                status_code=410,
+                body=_err(
+                    "quote_expired",
+                    "The payment quote has expired. Start a new request to continue.",
+                ),
+                tool_call_id=call.id,
+            )
+
+        providers = SqlAlchemyProviderRepository(self._session)
+        service_version = await providers.get_service_version(quote.service_version_id)
+        service = (
+            await providers.get_service(service_version.service_id)
+            if service_version is not None
+            else None
+        )
+        provider = await providers.get(quote.provider_id)
+        metrics = (
+            await providers.get_metrics(service.id)
+            if service is not None
+            else None
+        )
+        if (
+            service_version is None
+            or service is None
+            or provider is None
+            or service_version.provider_id != quote.provider_id
+            or service.provider_id != quote.provider_id
+            or service.organisation_id != agent.organisation_id
+            or service.project_id != agent.project_id
+            or service.environment != agent.environment
+            or provider.organisation_id != agent.organisation_id
+            or provider.project_id != agent.project_id
+            or provider.environment != agent.environment
+            or not provider.is_operable()
+            # An operator pause prevents new routes. The manual inactive state
+            # alone must not invalidate a quote that was already issued.
+            or service.status.value == "deprecated"
+            or not service_version.is_active
+            or metrics is None
+            or not metrics.health_check_passing
+        ):
+            return InvokeResult(
+                status_code=409,
+                body=_err(
+                    "service_unavailable",
+                    "The quoted service is no longer available. Start a new request when it is available again.",
+                ),
+                tool_call_id=call.id,
+            )
 
         # 1. Verify the proof (local checklist + adapter, fail-closed).
         try:

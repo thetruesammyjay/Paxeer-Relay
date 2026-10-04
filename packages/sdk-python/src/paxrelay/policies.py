@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from paxrelay.models import Policy, PolicyAssignment
+from paxrelay.models import Policy, PolicyAssignment, PolicyDetail
 
 if TYPE_CHECKING:
     from paxrelay.client import AsyncPaxRelayClient
@@ -33,6 +33,10 @@ class PoliciesResource:
         allowed_capabilities: Sequence[str] = (),
         allowed_providers: Sequence[UUID | str] = (),
         blocked_providers: Sequence[UUID | str] = (),
+        minimum_provider_reputation: float | None = None,
+        minimum_provider_success_rate: float | None = None,
+        maximum_accepted_latency_ms: int | None = None,
+        maximum_consecutive_failures: int | None = None,
     ) -> Policy:
         """Create a tenant policy using USDX atomic amounts (six decimals)."""
         payload = {
@@ -46,6 +50,10 @@ class PoliciesResource:
             "allowed_capabilities": list(allowed_capabilities),
             "allowed_providers": [str(provider_id) for provider_id in allowed_providers],
             "blocked_providers": [str(provider_id) for provider_id in blocked_providers],
+            "minimum_provider_reputation": minimum_provider_reputation,
+            "minimum_provider_success_rate": minimum_provider_success_rate,
+            "maximum_accepted_latency_ms": maximum_accepted_latency_ms,
+            "maximum_consecutive_failures": maximum_consecutive_failures,
         }
         result = await self._client._request("POST", "policies", json=payload)
         return Policy.model_validate(result)
@@ -74,11 +82,11 @@ class PoliciesResource:
         result = await self._client._request("GET", "policies", params=params)
         return [Policy.model_validate(item) for item in result]
 
-    async def get(self, policy_id: UUID | str) -> Policy:
-        """Retrieve policy metadata by ID."""
+    async def get(self, policy_id: UUID | str) -> PolicyDetail:
+        """Retrieve a policy's metadata, configured rules, and assignments."""
         resource_id = self._client._path_id(policy_id)
         result = await self._client._request("GET", f"policies/{resource_id}")
-        return Policy.model_validate(result)
+        return PolicyDetail.model_validate(result)
 
     async def assign(
         self,

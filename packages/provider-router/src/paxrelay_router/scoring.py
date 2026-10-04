@@ -34,9 +34,9 @@ def score_latency(
     metrics: ProviderMetrics,
     reference_max_ms: float = 5000.0,
 ) -> float:
-    """Lower latency → higher score. Normalised against reference_max_ms."""
+    """Lower latency → higher score; unknown latency receives a neutral score."""
     if metrics.avg_latency_ms <= 0:
-        return 1.0
+        return 0.5
     # Invert: 0 ms → 1.0, reference_max_ms → 0.0
     return _normalize(metrics.avg_latency_ms, reference_max_ms, 0.0)
 

@@ -1407,7 +1407,8 @@ img {
   grid-column: 1 / -1;
 }
 
-.policy-form-hint {
+.policy-form-hint,
+.resource-form-hint {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -1538,6 +1539,47 @@ img {
   text-decoration: underline;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.service-protocol-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.service-protocol-field legend {
+  margin-bottom: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.service-protocol-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-protocol-option {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--chalk);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.service-protocol-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ember);
 }
 
 .service-directory-table {
@@ -3251,6 +3293,53 @@ img {
   white-space: nowrap;
 }
 
+.transaction-details-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.execution-attempt-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: var(--surface-subtle, #f7f8fa);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 10px;
+}
+
+.execution-attempt-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.execution-attempt-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.execution-attempt-table {
+  min-width: 900px;
+}
+
+.execution-unknown-warning {
+  padding: 12px 14px;
+  color: #743a00;
+  background: #fff4d6;
+  border: 1px solid #f1d28a;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.execution-attempt-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .analytics-breakdown .data-table th:first-child,
 .analytics-breakdown .data-table td:first-child {
   text-align: left;
@@ -3303,6 +3392,90 @@ img {
 .data-access-error .button {
   min-height: 40px;
   padding-inline: 16px;
+}
+
+.service-status-cell {
+  min-width: 142px;
+}
+
+.service-status-control {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-status-action {
+  min-height: 44px;
+  padding: 0 15px;
+  font-size: 12px;
+}
+
+.service-status-terminal {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.service-status-error {
+  display: block;
+  max-width: 280px;
+  margin: 5px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.service-status-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-width: none;
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: 28px;
+  background: var(--limestone);
+  color: var(--ink);
+}
+
+.service-status-dialog::backdrop {
+  background: rgba(7, 6, 7, 0.58);
+}
+
+.service-status-dialog h2 {
+  margin: 8px 0 0;
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.service-status-dialog-copy {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.service-status-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.service-status-dialog-actions .button {
+  min-height: 44px;
+  padding-inline: 16px;
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .service-status-dialog {
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .service-status-dialog-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
 }
 
 @media (max-width: 900px) {

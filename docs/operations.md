@@ -11,13 +11,23 @@ services and the work still needed before production use.
 | Control-plane API | 8000 | `GET /health` is liveness; `GET /ready` checks PostgreSQL and Redis when API rate limiting is enabled. |
 | Gateway | 8080 | `GET /health` is liveness; `GET /ready` checks PostgreSQL and Redis when gateway rate limiting is enabled. |
 | Simulator | 8090 | `GET /health` reports process status and environment. |
-| Worker | none | Long-running process; no HTTP health endpoint is currently exposed. |
+| Worker | 8081 | `GET /health` is liveness; `GET /ready` checks PostgreSQL and the freshness of every scheduled job loop. |
 
 Use `/health` for liveness and `/ready` for API or gateway readiness. The API
 checks PostgreSQL and Redis when API rate limiting is enabled. The gateway
 checks PostgreSQL and Redis when gateway rate limiting is enabled. Neither
 readiness check confirms payment-network or provider availability. A not-ready
 response is HTTP 503 and does not expose connection details.
+
+The worker health listener binds to `WORKER_HEALTH_HOST` and
+`WORKER_HEALTH_PORT` (defaults `0.0.0.0:8081`). Keep this port on the internal
+deployment network. `GET /health` returns 200 while the worker process can
+serve requests. `GET /ready` returns 200 only when PostgreSQL responds and all
+scheduled jobs are running and have completed a successful cycle recently; it
+returns 503 during startup, after a job stops, after job progress is stale, or
+when PostgreSQL is unavailable. A job is stale after the greater of 30 seconds
+or three of its configured intervals. The response names each job and its
+state but omits database connection details and exception messages.
 
 ## Start and stop local dependencies
 
@@ -46,7 +56,7 @@ that data is disposable.
 | Gateway 409 | The quote nonce was already claimed, an idempotency key conflicts with stored request data/state, or a pre-migration completed call has no saved result | Do not resubmit a claimed proof or alter a request under the same key. Check the tool-call and execution-attempt records; a reserved call may need reconciliation after a gateway interruption. |
 | Gateway 410 | The payment quote expired | Start a new request with a new idempotency key to obtain a fresh quote. |
 | Gateway 413 | Invocation body exceeds `GATEWAY_MAX_REQUEST_BYTES` | Reduce the payload or review the configured cap. |
-| Gateway 429 | An authenticated API key exceeded the gateway request limit | Wait for `Retry-After` seconds or ask an administrator to review the key quota. |
+| Gateway 429 | An authenticated API key exceeded its request-rate or in-flight concurrency limit | For rate limits, wait for `Retry-After` seconds; for concurrency limits, wait for an active request to finish, then retry. |
 | Gateway 503 | PostgreSQL or Redis is unavailable, or the selected provider endpoint failed its pre-quote safety check | Check `/ready` for dependency failures. For `provider_endpoint_unavailable`, correct the provider URL, DNS, or production hostname allowlist; no payment challenge was issued. |
 | Gateway 502 | Provider returned a non-2xx response, timed out, could not be reached, was rejected during the final destination check, or exceeded the response-size cap | Inspect attempt status and provider endpoint. A final destination rejection or oversized response can happen after payment is verified; an oversized response is recorded as unknown execution. |
 | API 401 | Missing, invalid, or expired bearer API key | Reissue a key through the bootstrap or key-management process; raw keys are returned only once. |
@@ -61,10 +71,13 @@ that data is disposable.
 
 The gateway verifies and records payment before forwarding to the provider. A
 provider failure can therefore leave a verified payment and failed request.
-The current implementation has no automatic refund or dispute flow. Preserve
-the payment, tool-call, and execution-attempt IDs while investigating; do not
-replay a paid operation to a different provider without an explicit recovery
-decision.
+If the gateway stops with a provider attempt still reserved, the execution
+recovery job marks the attempt and call `unknown` after the configured stale
+window, records an audit entry, and emits `call.recovery.required`. It does not
+retry the provider or change the verified payment. There is no automatic refund
+or dispute flow. Preserve the payment, tool-call, and execution-attempt IDs
+while investigating; do not replay a paid operation to a different provider
+without an explicit recovery decision.
 
 Current automatic provider failover is not implemented. Reconciliation checks
 local payment, intent, and quote consistency, reads the stored transaction from
@@ -76,11 +89,12 @@ operator before using the result for financial operations.
 
 ## Background work status
 
-The worker starts seven periodic job loops:
+The worker starts eight periodic job loops:
 
 | Job | Interval | Current behavior |
 | --- | ---: | --- |
 | Approval expiration | 30 seconds | Marks overdue pending or approved requests and their still-pending tool calls expired; writes an audit row in the same transaction. A locked row is skipped until the next scan. |
+| Execution recovery | Configured, 60 seconds by default | Marks paid attempts left reserved or running beyond the configured stale window as unknown, fails the call, and writes an audit row plus `call.recovery.required` outbox event atomically. It never retries the provider or changes payment state. |
 | Outbox fan-out | 5 seconds | Moves supported transactional events into durable webhook delivery rows. |
 | Webhook delivery | 2 seconds | Claims due rows, signs and sends bounded HTTP requests, and applies retry or terminal state. |
 | Health check | 30 seconds | Probes each due active service's configured health path with a bounded GET, rejects unsafe DNS results, pins requests to checked public IPs outside development/test, and removes a service from routing after its configured consecutive-failure threshold. |

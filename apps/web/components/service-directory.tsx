@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScopedApiKeyAccess } from "@/components/scoped-api-key-access";
+import { ServicePublishForm } from "@/components/service-publish-form";
+import { ServiceStatusControl } from "@/components/service-status-control";
 import { useServices } from "@/hooks/use-services";
 import type { ServiceRecord } from "@/hooks/use-services";
 import { ApiError } from "@/lib/api-client";
@@ -47,6 +49,24 @@ function statusTone(status: string) {
 
 function statusLabel(status: string) {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function probeStatus(health: ServiceRecord["health"]) {
+  if (!health.last_check_at) return "Awaiting first probe";
+  if (health.last_check_passing) return "Last probe passed";
+  return "Last probe failed";
+}
+
+function probeTone(health: ServiceRecord["health"]) {
+  if (!health.last_check_at) return "neutral";
+  return health.last_check_passing ? "active" : "denied";
+}
+
+function probeTime(health: ServiceRecord["health"]) {
+  if (!health.last_check_at) return "Not measured yet";
+  const checkedAt = new Date(health.last_check_at);
+  if (Number.isNaN(checkedAt.getTime())) return "Check time unavailable";
+  return `Checked ${checkedAt.toLocaleString()}`;
 }
 
 function keyErrorMessage(error: unknown) {
@@ -120,6 +140,12 @@ export function ServiceDirectory() {
     setSearch("");
   }
 
+  function handlePublished() {
+    void queryClient.invalidateQueries({
+      queryKey: ["services", connectionId],
+    });
+  }
+
   const normalizedSearch = search.trim().toLowerCase();
   const hasFilters = Boolean(normalizedSearch || status || protocol);
   const services = useMemo(
@@ -140,8 +166,8 @@ export function ServiceDirectory() {
           <div className="eyebrow">Paid capabilities</div>
           <h1 className="page-title">Services</h1>
           <p className="page-subtitle">
-            Review published service capabilities, protocols, prices, and
-            configured health probes.
+            Review published capabilities, per-call prices, and the latest
+            provider health checks.
           </p>
         </div>
         {apiKey ? (
@@ -207,6 +233,7 @@ export function ServiceDirectory() {
         </section>
       ) : (
         <>
+          <ServicePublishForm apiKey={apiKey} onPublished={handlePublished} />
           <div className="transaction-toolbar toolbar">
             <input
               className="search"
@@ -258,8 +285,8 @@ export function ServiceDirectory() {
               <div>
                 <h2 className="card-title">Published services</h2>
                 <p className="card-description">
-                  Refreshes every 30 seconds. Health settings describe probe
-                  configuration, not the latest probe result.
+                  Refreshes every 30 seconds. New services remain out of
+                  routing until the first health probe passes.
                 </p>
               </div>
               <span className="status neutral">Live API data</span>
@@ -286,6 +313,7 @@ export function ServiceDirectory() {
                       <th scope="col">Protocols</th>
                       <th scope="col">Probe setup</th>
                       <th scope="col">Status</th>
+                      <th scope="col">Routing</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -323,12 +351,36 @@ export function ServiceDirectory() {
                           <span className="cell-stack service-probe">
                             <strong>{service.health.endpoint}</strong>
                             <span>Every {service.health.interval_seconds}s</span>
+                            <span
+                              className={`status ${probeTone(service.health)}`}
+                              title={
+                                service.health.last_check_status_code
+                                  ? `HTTP ${service.health.last_check_status_code}`
+                                  : undefined
+                              }
+                            >
+                              {probeStatus(service.health)}
+                            </span>
+                            <span>{probeTime(service.health)}</span>
+                            {service.health.consecutive_health_failures ? (
+                              <span>
+                                {service.health.consecutive_health_failures} consecutive probe failure
+                                {service.health.consecutive_health_failures === 1 ? "" : "s"}
+                              </span>
+                            ) : null}
                           </span>
                         </td>
                         <td>
                           <span className={`status ${statusTone(service.status)}`}>
                             {statusLabel(service.status)}
                           </span>
+                        </td>
+                        <td className="service-status-cell">
+                          <ServiceStatusControl
+                            service={service}
+                            apiKey={apiKey}
+                            connectionId={connectionId}
+                          />
                         </td>
                       </tr>
                     ))}

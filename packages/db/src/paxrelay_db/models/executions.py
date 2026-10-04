@@ -33,6 +33,24 @@ class ExecutionAttemptModel(Base, TimestampMixin):
             "created_at",
             "id",
         ),
+        Index(
+            "ix_execution_attempts_terminal_completion",
+            "response_received_at",
+            "created_at",
+            "attempt_number",
+            "id",
+            postgresql_where=text(
+                "response_received_at IS NOT NULL AND execution_state IN "
+                "('succeeded', 'provider_error', 'timeout', 'unknown')"
+            ),
+        ),
+        Index(
+            "ix_execution_attempts_active_stale",
+            "execution_state",
+            "created_at",
+            "id",
+            postgresql_where=text("execution_state IN ('reserved', 'running')"),
+        ),
     )
     id: Mapped[str] = pk_uuid()
     tool_call_id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), nullable=False, index=True)

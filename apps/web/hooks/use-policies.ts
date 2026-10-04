@@ -58,6 +58,10 @@ export interface PolicyCreateInput {
   allowed_capabilities: string[];
   allowed_providers: string[];
   blocked_providers: string[];
+  minimum_provider_reputation: number | null;
+  minimum_provider_success_rate: number | null;
+  maximum_accepted_latency_ms: number | null;
+  maximum_consecutive_failures: number | null;
   approval_threshold: PolicyMoney | null;
 }
 

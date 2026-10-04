@@ -1,8 +1,8 @@
 """Service publishing and lookup routes.
 
-Publishing a service also creates its immutable service version and the
-initial provider metrics row (defaults to perfect scores until health checks
-measure real values), so routing has something to score immediately.
+Publishing a service also creates its immutable service version and an
+initial unmeasured provider metrics row. It stays out of routing until a
+health check passes. Read responses include the latest probe result.
 """
 
 from __future__ import annotations
@@ -18,14 +18,15 @@ from paxrelay_domain import (
     ServiceHealth,
     ServicePricing,
     ServiceProtocol,
+    ServiceStatus,
     ServiceVersion,
 )
 from paxrelay_db.repositories import SqlAlchemyProviderRepository
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
 from paxrelay_api.audit import record_change
-from paxrelay_api.exceptions import NotFoundError
-from paxrelay_api.schemas import ServiceCreate, ServiceOut
+from paxrelay_api.exceptions import ConflictError, NotFoundError
+from paxrelay_api.schemas import ServiceCreate, ServiceOut, ServiceStatusUpdate
 from paxrelay_api.security.authorization import require_scope
 from paxrelay_api.tenant import tenant_owns
 
@@ -57,6 +58,10 @@ def _service_out(s: Service) -> ServiceOut:
             "interval_seconds": s.health.interval_seconds,
             "timeout_seconds": s.health.timeout_seconds,
             "failure_threshold": s.health.failure_threshold,
+            "last_check_at": s.health.last_check_at,
+            "last_check_passing": s.health.last_check_passing,
+            "consecutive_health_failures": s.health.consecutive_health_failures,
+            "last_check_status_code": s.health.last_check_status_code,
         },
         description=s.description,
     )
@@ -117,16 +122,16 @@ async def publish_service(
     )
     await repo.save_service_version(version)
 
-    # Default metrics so routing can score the new service immediately.
+    # Keep the service out of routing until its first real health check passes.
     await repo.save_metrics(
         ProviderMetrics(
             service_id=saved.id,
             provider_id=provider_id,
-            reputation_score=1.0,
-            success_rate=1.0,
+            reputation_score=0.5,
+            success_rate=0.5,
             avg_latency_ms=0.0,
-            availability_score=1.0,
-            health_check_passing=True,
+            availability_score=0.0,
+            health_check_passing=False,
         )
     )
     await record_change(
@@ -154,6 +159,55 @@ async def list_services(session: SessionDep, tenant: TenantDep) -> list[ServiceO
         environment=tenant.environment,
     )
     return [_service_out(s) for s in services]
+
+
+@router.patch(
+    "/{service_id}/status",
+    response_model=ServiceOut,
+    dependencies=[Depends(require_scope("services:write"))],
+)
+async def update_service_status(
+    service_id: UUID,
+    body: ServiceStatusUpdate,
+    request: Request,
+    session: SessionDep,
+    tenant: TenantDep,
+) -> ServiceOut:
+    """Pause or resume a service for new routes, recording the transition."""
+    repo = SqlAlchemyProviderRepository(session)
+    outcome = await repo.set_service_status(
+        service_id,
+        organisation_id=tenant.organisation_id,
+        project_id=tenant.project_id,
+        environment=tenant.environment,
+        status=ServiceStatus(body.status),
+    )
+    if outcome is None:
+        raise NotFoundError(f"Service {service_id} not found.")
+
+    service, previous_status = outcome
+    if previous_status == ServiceStatus.DEPRECATED:
+        raise ConflictError("A deprecated service cannot be resumed or paused.")
+
+    if previous_status != service.status:
+        event_type = (
+            "service.enabled"
+            if service.status == ServiceStatus.ACTIVE
+            else "service.disabled"
+        )
+        await record_change(
+            request=request,
+            session=session,
+            tenant=tenant,
+            event_type=event_type,
+            resource_type="service",
+            resource_id=service.id,
+            details={
+                "previous_status": previous_status.value,
+                "status": service.status.value,
+            },
+        )
+    return _service_out(service)
 
 
 @router.get(

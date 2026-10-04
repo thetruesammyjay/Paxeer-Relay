@@ -12,11 +12,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
+from paxrelay_db.models.executions import ExecutionAttemptModel
 from paxrelay_db.models.payments import ToolCallModel
 from paxrelay_db.repositories._common import sid
 
 from paxrelay_api.dependencies import SessionDep, TenantDep
-from paxrelay_api.schemas import TransactionOut
+from paxrelay_api.exceptions import NotFoundError
+from paxrelay_api.schemas import ExecutionAttemptOut, TransactionOut
 from paxrelay_api.security.authorization import require_scope
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -76,3 +78,60 @@ async def list_transactions(
     stmt = stmt.limit(limit).offset(offset)
     rows = (await session.execute(stmt)).scalars().all()
     return [_transaction_out(m) for m in rows]
+
+
+@router.get(
+    "/{tool_call_id}/execution-attempts",
+    response_model=list[ExecutionAttemptOut],
+    dependencies=[Depends(require_scope("transactions:read"))],
+)
+async def list_execution_attempts(
+    tool_call_id: UUID,
+    session: SessionDep,
+    tenant: TenantDep,
+    limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[ExecutionAttemptOut]:
+    """List safe attempt metadata for a transaction owned by this tenant."""
+    transaction_id = await session.scalar(
+        select(ToolCallModel.id).where(
+            ToolCallModel.id == sid(tool_call_id),
+            ToolCallModel.organisation_id == sid(tenant.organisation_id),
+            ToolCallModel.project_id == sid(tenant.project_id),
+            ToolCallModel.environment == tenant.environment,
+        )
+    )
+    if transaction_id is None:
+        # Keep missing and cross-tenant identifiers indistinguishable.
+        raise NotFoundError("Transaction not found.")
+
+    stmt = (
+        select(ExecutionAttemptModel)
+        .where(ExecutionAttemptModel.tool_call_id == sid(tool_call_id))
+        .order_by(
+            ExecutionAttemptModel.attempt_number.asc(),
+            ExecutionAttemptModel.created_at.asc(),
+            ExecutionAttemptModel.id.asc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    attempts = (await session.execute(stmt)).scalars().all()
+    return [
+        ExecutionAttemptOut(
+            id=attempt.id,
+            tool_call_id=attempt.tool_call_id,
+            provider_id=attempt.provider_id,
+            service_version_id=attempt.service_version_id,
+            attempt_number=attempt.attempt_number,
+            execution_state=attempt.execution_state,
+            request_forwarded_at=attempt.request_forwarded_at,
+            response_received_at=attempt.response_received_at,
+            latency_ms=attempt.latency_ms,
+            http_status_code=attempt.http_status_code,
+            provider_error_code=attempt.provider_error_code,
+            created_at=attempt.created_at,
+            updated_at=attempt.updated_at,
+        )
+        for attempt in attempts
+    ]

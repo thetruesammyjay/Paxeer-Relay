@@ -11,13 +11,14 @@ attempt number.
 Routing applies hard filters before scoring. A candidate must:
 
 1. Have an active service status.
-2. Have a passing health flag.
-3. Stay at or below `maximum_price`, when one is supplied.
-4. Not appear in `blocked_providers`.
-5. Appear in `allowed_providers` when the allowlist is non-empty.
-6. Meet `minimum_reputation` and `minimum_success_rate`, when set.
-7. Stay at or below `maximum_latency_ms`, when set.
-8. Support at least one required protocol, when the list is non-empty.
+2. Belong to the active provider in the agent's environment.
+3. Have a passing health flag from a real worker probe.
+4. Stay at or below `maximum_price`, when one is supplied.
+5. Not appear in `blocked_providers`.
+6. Appear in `allowed_providers` when the allowlist is non-empty.
+7. Meet `minimum_reputation` and `minimum_success_rate`, when set.
+8. Stay at or below `maximum_latency_ms`, when set.
+9. Support at least one required protocol, when the list is non-empty.
 
 Capability matching happens when the repository loads eligible service
 versions. If every candidate is filtered out, the router returns no decision.
@@ -30,7 +31,7 @@ Every eligible candidate receives normalised scores from 0 to 1:
 | --- | --- |
 | Reputation | Provider metrics value as stored |
 | Success rate | Provider metrics value as stored |
-| Latency | Inverted linear score against a 5,000 ms reference; unknown/non-positive latency currently receives 1.0 |
+| Latency | Inverted linear score against a 5,000 ms reference; unknown/non-positive latency receives 0.5 |
 | Price | Relative to `maximum_price`; an unknown price gets 0.5; without a positive maximum price the score is 1.0 |
 | Availability | Provider metrics value as stored |
 
@@ -63,11 +64,20 @@ strategy, composite score, dimension breakdown, explanation, and attempt
 number. Receipts copy the chosen strategy and score so operators can understand
 why a provider was selected.
 
-Publishing a service currently creates metrics with reputation, success rate,
-and availability set to 1.0 and average latency set to zero. Since the worker
-health/indexing jobs are stubs, new services can appear perfect until real
-measurements are implemented. Treat these initial values as defaults, not
-observed performance.
+Publishing a service creates neutral, unmeasured routing metrics and sets its
+health flag to false. It cannot receive new routes until the worker records a
+successful health probe. The first availability score is the first measured
+observation; later observations use the configured exponential moving
+average. The service directory shows the latest health result and timestamp.
+Existing rows without a recorded probe are also reset to fail closed by the
+`0014_provider_health_fail_closed` migration.
+
+An operator can set a service to `inactive` to remove it from new candidate
+sets, then set it back to `active` to make it eligible again. Resuming does not
+bypass the provider's active state or the passing-health requirement. Quotes
+issued before a pause remain valid until their normal expiry, so those paid
+requests may still complete; the pause does not revoke or refund an external
+payment.
 
 ## Failover status and constraints
 

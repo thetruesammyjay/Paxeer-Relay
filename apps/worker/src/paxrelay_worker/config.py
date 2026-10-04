@@ -32,6 +32,10 @@ class WorkerSettings(BaseSettings):
     database_pool_size: int = 5
     database_max_overflow: int = 10
 
+    # Internal worker liveness and readiness listener
+    worker_health_host: str = Field(default="0.0.0.0", min_length=1, max_length=255)
+    worker_health_port: int = Field(default=8081, ge=1, le=65535)
+
     # Webhook delivery
     auth_secret: str | None = Field(default=None, repr=False)
     webhook_encryption_key: str | None = Field(default=None, repr=False)
@@ -52,6 +56,12 @@ class WorkerSettings(BaseSettings):
     provider_health_concurrency: int = Field(default=10, ge=1, le=50)
     provider_metrics_window_days: int = Field(default=7, ge=1, le=90)
     provider_metrics_trailing_attempts: int = Field(default=100, ge=1, le=1000)
+
+    # Recover paid executions abandoned by a stopped gateway process. Keep the
+    # stale window longer than the gateway's maximum provider request timeout.
+    execution_recovery_interval_seconds: int = Field(default=60, ge=5, le=3600)
+    execution_recovery_stale_seconds: int = Field(default=300, ge=180, le=86400)
+    execution_recovery_batch_size: int = Field(default=100, ge=1, le=500)
 
     @field_validator("provider_endpoint_host_allowlist")
     @classmethod
