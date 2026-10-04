@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PolicyCreateForm } from "@/components/policy-create-form";
+import { PolicyDetailRow } from "@/components/policy-detail-row";
 import { ScopedApiKeyAccess } from "@/components/scoped-api-key-access";
 import { usePolicies } from "@/hooks/use-policies";
 import { ApiError } from "@/lib/api-client";
@@ -20,10 +22,6 @@ function keyErrorMessage(error: unknown) {
     return `Policies could not be loaded (HTTP ${error.status}). Try again shortly.`;
   }
   return "The API could not be reached. Check that it is running and try again.";
-}
-
-function shortId(value: string) {
-  return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
 function titleCase(value: string) {
@@ -62,6 +60,9 @@ export function PolicyDirectory() {
         queryClient.removeQueries({
           queryKey: ["policies", activeConnectionId],
         });
+        queryClient.removeQueries({
+          queryKey: ["policy-detail", activeConnectionId],
+        });
       }
     };
   }, [connectionId, queryClient]);
@@ -75,6 +76,7 @@ export function PolicyDirectory() {
   function disconnect() {
     if (connectionId) {
       queryClient.removeQueries({ queryKey: ["policies", connectionId] });
+      queryClient.removeQueries({ queryKey: ["policy-detail", connectionId] });
     }
     setApiKey("");
     setKeyValidated(false);
@@ -83,6 +85,16 @@ export function PolicyDirectory() {
     setDebouncedSearch("");
     setMode("");
     setActive("");
+  }
+
+  function handlePolicyCreated() {
+    setSearch("");
+    setDebouncedSearch("");
+    setMode("");
+    setActive("");
+    void queryClient.invalidateQueries({
+      queryKey: ["policies", connectionId],
+    });
   }
 
   return (
@@ -118,6 +130,13 @@ export function PolicyDirectory() {
         onConnect={connect}
         onDisconnect={disconnect}
       />
+
+      {apiKey && query.isSuccess ? (
+        <PolicyCreateForm
+          apiKey={apiKey}
+          onCreated={handlePolicyCreated}
+        />
+      ) : null}
 
       {!apiKey ? (
         <section className="card data-access-placeholder" aria-live="polite">
@@ -207,8 +226,8 @@ export function PolicyDirectory() {
               <div>
                 <h2 className="card-title">Policy summaries</h2>
                 <p className="card-description">
-                  Refreshes every 30 seconds. This API view does not include
-                  rule details or agent assignments.
+                  Refreshes every 30 seconds. Open a policy to inspect its full
+                  rule configuration and assigned agents.
                 </p>
               </div>
               <span className="status neutral">Live API data</span>
@@ -237,38 +256,17 @@ export function PolicyDirectory() {
                       <th scope="col">Mode</th>
                       <th scope="col">Version</th>
                       <th scope="col">Availability</th>
+                      <th scope="col">Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(query.data ?? []).map((policy) => (
-                      <tr key={policy.id}>
-                        <td>
-                          <div className="cell-stack">
-                            <strong>{policy.name}</strong>
-                            <span title={policy.description ?? undefined}>
-                              {policy.description || "No description provided"}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <code className="primary-cell mono" title={policy.id}>
-                            {shortId(policy.id)}
-                          </code>
-                        </td>
-                        <td>
-                          <span className="status neutral">
-                            {titleCase(policy.mode)}
-                          </span>
-                        </td>
-                        <td className="primary-cell">v{policy.version}</td>
-                        <td>
-                          <span
-                            className={`status ${policy.is_active ? "active" : "neutral"}`}
-                          >
-                            {policy.is_active ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                      </tr>
+                      <PolicyDetailRow
+                        key={policy.id}
+                        policy={policy}
+                        apiKey={apiKey}
+                        connectionId={connectionId}
+                      />
                     ))}
                   </tbody>
                 </table>

@@ -148,6 +148,15 @@ class SqlAlchemyPolicyRepository:
         await self._session.refresh(m)
         return _to_assignment(m)
 
+    async def list_assignments(self, policy_id: UUID) -> list[PolicyAssignment]:
+        stmt = (
+            select(PolicyAssignmentModel)
+            .where(PolicyAssignmentModel.policy_id == sid(policy_id))
+            .order_by(PolicyAssignmentModel.created_at.asc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_assignment(row) for row in rows]
+
     async def lock_agent_for_budget(self, agent_id: UUID) -> bool:
         """Serialize budget checks and reservations for one agent."""
         stmt = (

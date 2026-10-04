@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScopedApiKeyAccess } from "@/components/scoped-api-key-access";
+import { AgentCreateForm } from "@/components/agent-create-form";
 import { useAgents } from "@/hooks/use-agents";
 import type { Agent } from "@/hooks/use-agents";
 import { ApiError } from "@/lib/api-client";
@@ -75,6 +76,9 @@ export function AgentDirectory() {
   const [connectionId, setConnectionId] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [copiedAgentId, setCopiedAgentId] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const [copyFallbackId, setCopyFallbackId] = useState("");
   const query = useAgents(apiKey, connectionId);
 
   useEffect(() => {
@@ -99,6 +103,29 @@ export function AgentDirectory() {
     setConnectionId("");
     setStatus("");
     setSearch("");
+    setCopiedAgentId("");
+    setCopyMessage("");
+    setCopyFallbackId("");
+  }
+
+  function handleCreated(agent: Agent) {
+    queryClient.setQueryData<Agent[]>(["agents", connectionId], (current) =>
+      [agent, ...(current ?? []).filter((item) => item.id !== agent.id)].slice(0, 100),
+    );
+  }
+
+  async function copyAgentId(agentId: string) {
+    setCopyMessage("");
+    setCopyFallbackId("");
+    try {
+      await navigator.clipboard.writeText(agentId);
+      setCopiedAgentId(agentId);
+      setCopyMessage("Agent ID copied to clipboard.");
+    } catch {
+      setCopiedAgentId("");
+      setCopyFallbackId(agentId);
+      setCopyMessage("Clipboard access is unavailable. Copy this ID manually:");
+    }
   }
 
   const normalizedSearch = search.trim().toLowerCase();
@@ -187,6 +214,7 @@ export function AgentDirectory() {
         </section>
       ) : (
         <>
+          <AgentCreateForm apiKey={apiKey} onCreated={handleCreated} />
           <div className="transaction-toolbar toolbar">
             <input
               className="search"
@@ -268,9 +296,19 @@ export function AgentDirectory() {
                           </div>
                         </td>
                         <td>
-                          <code className="primary-cell mono" title={agent.id}>
-                            {shortId(agent.id)}
-                          </code>
+                          <div className="agent-id-cell">
+                            <code className="primary-cell mono" title={agent.id}>
+                              {shortId(agent.id)}
+                            </code>
+                            <button
+                              className="button ghost agent-copy-id"
+                              type="button"
+                              aria-label={`Copy agent ID ${agent.id}`}
+                              onClick={() => void copyAgentId(agent.id)}
+                            >
+                              {copiedAgentId === agent.id ? "Copied" : "Copy ID"}
+                            </button>
+                          </div>
                         </td>
                         <td>
                           {agent.wallet_address ? (
@@ -300,6 +338,11 @@ export function AgentDirectory() {
                 </table>
               </div>
             )}
+            {copyMessage ? (
+              <p className="agent-copy-feedback" role="status" aria-live="polite">
+                {copyMessage} {copyFallbackId ? <code className="mono">{copyFallbackId}</code> : null}
+              </p>
+            ) : null}
           </section>
         </>
       )}

@@ -72,11 +72,21 @@ pages are connected to their API endpoints when keys with `agents:read`,
 `analytics:read`, or `transactions:read` scope are supplied. Settings lists
 project keys with `api-keys:read` and creates or revokes them with
 `api-keys:write`.
-The approvals page reads with
+The agents page reads with `agents:read` and registers agents with
+`agents:write`; a key with both scopes can perform both actions in one session.
+It links an optional wallet address as agent metadata, not as a connected or
+payment-capable wallet. A successful registration refreshes the directory and
+offers the full agent ID for copying. The approvals page reads with
 `approvals:read` and records decisions with `approvals:write`. Keys stay in
-page memory and are not written to browser storage. The policy list API returns
-a summary and does not expose rule details or agent assignments. Approval
+page memory and are not written to browser storage. The policy page reads
+summaries with `policies:read`, creates policies and assigns them to agents
+with `policies:write`, and loads full rules and assignments on demand. Approval
 allows a request to continue to payment checks; it does not submit a payment.
+The providers page reads with `providers:read` and registers provider records
+with `providers:write`. It collects an optional HTTP(S) website and address;
+production registrations require a payment wallet address. Provider website
+links are rendered only for HTTP(S) URLs. Registration does not verify provider
+ownership, and the directory does not show live health or performance.
 The services page lists up to 100 recent records and shows configured probe
 settings; the services endpoint does not provide the latest probe result.
 The receipts page lists up to 100 recent tenant-scoped summaries and displays

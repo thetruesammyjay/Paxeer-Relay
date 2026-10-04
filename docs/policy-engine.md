@@ -79,9 +79,10 @@ ensures a policy sees the proposed amount and provider. No active policy means
 the gateway returns HTTP 403.
 
 The API stores the policy explanation and binds the approval to the route,
-amount, recipient, and policy version. The approval API is available, while the
-current operator console remains presentation-only and is not connected to
-these routes. Individual dashboard-user authentication is also not implemented.
+amount, recipient, and policy version. The operator console can create
+policies, inspect their stored rules, and assign them to agents through the
+scoped API-key flow. Individual dashboard-user authentication is not yet
+implemented; a dashboard key identifies the project, not the person using it.
 
 ## Changes and validation
 

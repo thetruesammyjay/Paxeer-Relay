@@ -51,7 +51,7 @@ apps/web/
 │   ├── for-teams/page.tsx             # Public agent-operator introduction
 │   ├── how-it-works/page.tsx          # Public request lifecycle explanation
 │   ├── page.tsx                       # Public product landing page
-│   ├── policies/page.tsx              # Live tenant policy summary directory
+│   ├── policies/page.tsx              # Live tenant policy workspace
 │   ├── providers/page.tsx             # Live tenant provider directory
 │   ├── receipts/page.tsx              # Live tenant receipt summaries
 │   ├── services/page.tsx              # Live tenant service directory
@@ -61,14 +61,18 @@ apps/web/
 │   └── layout.tsx                     # Root metadata and AppShell
 ├── components/
 │   ├── app-shell.tsx                  # Role-aware desktop shell, workspace switcher, mobile nav and More sheet
-│   ├── agent-directory.tsx            # Scoped live agent list, filters, and empty/error states
+│   ├── agent-create-form.tsx           # Register an agent, validate its identity fields, and copy its new ID
+│   ├── agent-directory.tsx            # Scoped agent registration, live list, filters, and empty/error states
 │   ├── analytics-dashboard.tsx        # Scoped live spend and capability analytics
 │   ├── approval-queue.tsx             # Scoped approval review and confirmed decisions
 │   ├── api-key-inventory.tsx           # Scoped key inventory, creation, and confirmed revocation
 │   ├── icons.tsx                      # Existing small inline icons used by older PaxRelay screens
 │   ├── marketing-chrome.tsx           # Shared sticky public header and footer
+│   ├── policy-create-form.tsx          # Create policies with exact USDX limits and access rules
+│   ├── policy-detail-row.tsx            # Full policy rule view and agent assignment
 │   ├── policy-directory.tsx            # Scoped live policy summaries and filters
-│   ├── provider-directory.tsx          # Scoped live provider records and filters
+│   ├── provider-create-form.tsx         # Register provider details and copy its ID
+│   ├── provider-directory.tsx          # Scoped provider registration, live records, filters, and website links
 │   ├── receipt-directory.tsx           # Scoped receipt summaries and signature evidence
 │   ├── service-directory.tsx           # Scoped live services, prices, protocols, and probe settings
 │   ├── reveal.tsx                     # Reduced-motion-aware scroll reveals
@@ -77,12 +81,12 @@ apps/web/
 │   ├── status-badge.tsx               # Shared status label
 │   └── transaction-activity.tsx       # Scoped live request and payment activity
 ├── hooks/
-│   ├── use-agents.ts                  # Session-scoped React Query hook for agents
+│   ├── use-agents.ts                  # Session-scoped agent query and registration request
 │   ├── use-analytics.ts                # Session-scoped analytics API queries
 │   ├── use-api-keys.ts                 # Session-scoped key inventory and mutations
 │   ├── use-approvals.ts               # Session-scoped queue and decision mutation
-│   ├── use-policies.ts                # Session-scoped policy list query
-│   ├── use-providers.ts               # Session-scoped provider list query
+│   ├── use-policies.ts                # Session-scoped policy list, detail, and mutation calls
+│   ├── use-providers.ts               # Session-scoped provider list and registration request
 │   ├── use-receipts.ts                # Session-scoped receipt list query
 │   ├── use-services.ts                # Session-scoped service list query
 │   ├── use-settlement-reconciliation.ts # Typed reconciliation API query
@@ -121,23 +125,38 @@ uses `hooks/use-transactions.ts` to show recent request, payment, and execution
 states. Both read-only pages use `components/scoped-api-key-access.tsx` to keep
 scoped keys in page memory.
 `app/agents/page.tsx` composes `components/agent-directory.tsx`, which uses
-`hooks/use-agents.ts` to list agents visible to the supplied `agents:read` key.
-The key remains in page memory, results use a unique connection cache key, and
-disconnecting or leaving the page clears those cached results.
+`hooks/use-agents.ts` to list agents with `agents:read` and register an agent
+with `agents:write`. A key with both scopes can complete both actions in one
+session. The create form derives an editable lowercase slug from the name,
+validates an optional EVM wallet address, and keeps the description optional.
+Registration links an address as metadata; it does not connect a wallet or
+authorize payment. A successful create is added to the live list, and the new
+full agent ID can be copied for policy assignment. The key remains in page
+memory, results use a unique connection cache key, and disconnecting or
+leaving the page clears those cached results.
 `app/policies/page.tsx` composes `components/policy-directory.tsx`, which uses
 `hooks/use-policies.ts` to read policy summaries with a `policies:read` key.
-The API returns policy name, description, mode, version, and active state, but
-does not include rule details or agent assignments in this list response.
+`components/policy-create-form.tsx` creates policies with `policies:write`,
+exact USDX limits, a mode, and optional capability/provider lists.
+`components/policy-detail-row.tsx` loads one policy's complete rule set and
+current agent assignments on demand. It can assign a policy with
+`policies:write`; the operator copies an agent UUID from the Agents page.
+Money values remain exact atomic-unit integers across the API boundary.
 `app/approvals/page.tsx` composes `components/approval-queue.tsx` and
 `hooks/use-approvals.ts`. It reads the tenant queue with `approvals:read` and
 submits explicit approve or reject decisions with `approvals:write`. The UI
 requires a second confirmation and can attach an audit note; approval allows
 the request to continue to payment checks but does not submit payment.
 `app/providers/page.tsx` composes `components/provider-directory.tsx`, which
-uses `hooks/use-providers.ts` to list records visible to a `providers:read` key.
-Search and lifecycle state are API-backed; verification filtering uses the
-latest returned records. Provider health and performance are not in this API
-response.
+uses `hooks/use-providers.ts` to list records visible to a `providers:read` key
+and register providers with `providers:write`. A successful registration
+refreshes the directory and exposes the provider UUID for copying. The form
+captures an editable slug, an optional HTTP(S) website, description, and
+payment wallet address; production registrations require a wallet address.
+The API returns provider website URLs, which the directory renders only when
+they use HTTP or HTTPS. Search and lifecycle state are API-backed; verification
+filtering uses the latest returned records. Provider health and performance
+are not in this API response.
 `app/services/page.tsx` composes `components/service-directory.tsx`, which
 uses `hooks/use-services.ts` to list up to 100 recent services visible to a
 `services:read` key. Search, status, and protocol filters use that returned
@@ -168,11 +187,11 @@ preferences such as network defaults or receipt-retention settings.
 | `/admin` | `app/admin/page.tsx` | Internal platform admin overview; creator reviews, workspace list, health, and activity are sample data. |
 | `/admin/settlements` | `app/admin/settlements/page.tsx` | Tenant-scoped reconciliation review; reads API data with a `settlements:read` key. |
 | `/creator` | `app/creator/page.tsx` | Service-provider overview; services, requests, payment records, and profile are sample data. |
-| `/agents` | `app/agents/page.tsx` | Reads up to 100 agents visible to the supplied project/environment using an `agents:read` key; supports local search and status filtering. |
-| `/policies` | `app/policies/page.tsx` | Reads up to 100 policy summaries using a `policies:read` key; supports API-backed name, mode, and active-state filters. Rule details and assignments are not included by this endpoint. |
+| `/agents` | `app/agents/page.tsx` | Reads up to 100 agents with `agents:read`; registers agents with `agents:write`; supports local search, status filtering, and copying full agent IDs. |
+| `/policies` | `app/policies/page.tsx` | Reads up to 100 policy summaries with `policies:read`; creates policies and assigns agents with `policies:write`; expands a policy row to show its complete rules and current assignments. |
 | `/approvals` | `app/approvals/page.tsx` | Reads up to 100 recent requests with `approvals:read`; approve/reject requires `approvals:write`, a confirmation step, and supports an optional audit note. |
 | `/transactions` | `app/transactions/page.tsx` | Reads up to 100 recent request records with request/payment state filters and a `transactions:read` key. |
-| `/providers` | `app/providers/page.tsx` | Reads up to 100 provider records with `providers:read`; supports API-backed name/slug and lifecycle filters, plus local verification filtering. Health and performance metrics are not returned by this endpoint. |
+| `/providers` | `app/providers/page.tsx` | Reads up to 100 provider records with `providers:read`; registers providers with `providers:write`; supports search, lifecycle filters, verification filtering, and copying full provider IDs. Website links are limited to HTTP(S). Health and performance metrics are not returned by this endpoint. |
 | `/services` | `app/services/page.tsx` | Reads up to 100 recent service records with a `services:read` key; supports search, status, and protocol filters. Displays configured probe settings, not live health results. |
 | `/receipts` | `app/receipts/page.tsx` | Reads up to 100 tenant-scoped receipt summaries with a `receipts:read` key; supports local search and execution-state filtering. Shows signature metadata but does not verify signatures. |
 | `/analytics` | `app/analytics/page.tsx` | Reads the last 30 days of spend and capability totals from the API with an `analytics:read` key. |

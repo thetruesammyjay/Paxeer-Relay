@@ -31,6 +31,7 @@ def _provider_out(p: Provider) -> ProviderOut:
         status=p.status.value,
         is_verified=p.is_verified,
         description=p.description,
+        website_url=p.website_url,
     )
 
 

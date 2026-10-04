@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScopedApiKeyAccess } from "@/components/scoped-api-key-access";
+import { ProviderCreateForm } from "@/components/provider-create-form";
 import { useProviders } from "@/hooks/use-providers";
 import type { ProviderRecord } from "@/hooks/use-providers";
 import { ApiError } from "@/lib/api-client";
@@ -35,6 +36,17 @@ function displayWallet(value: string | null) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
+function safeWebsite(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return { href: url.href, label: url.hostname };
+  } catch {
+    return null;
+  }
+}
+
 function keyErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 401) return "The API key was not accepted. Check it and try again.";
@@ -64,6 +76,9 @@ export function ProviderDirectory() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
   const [verification, setVerification] = useState("");
+  const [copiedProviderId, setCopiedProviderId] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const [copyFallbackId, setCopyFallbackId] = useState("");
   const filters = { search: debouncedSearch, status };
   const query = useProviders(apiKey, connectionId, filters);
 
@@ -108,6 +123,29 @@ export function ProviderDirectory() {
     setDebouncedSearch("");
     setStatus("");
     setVerification("");
+    setCopiedProviderId("");
+    setCopyMessage("");
+    setCopyFallbackId("");
+  }
+
+  function handleCreated() {
+    void queryClient.invalidateQueries({
+      queryKey: ["providers", connectionId],
+    });
+  }
+
+  async function copyProviderId(providerId: string) {
+    setCopyMessage("");
+    setCopyFallbackId("");
+    try {
+      await navigator.clipboard.writeText(providerId);
+      setCopiedProviderId(providerId);
+      setCopyMessage("Provider ID copied to clipboard.");
+    } catch {
+      setCopiedProviderId("");
+      setCopyFallbackId(providerId);
+      setCopyMessage("Clipboard access is unavailable. Copy this ID manually:");
+    }
   }
 
   const providers = useMemo(
@@ -192,6 +230,7 @@ export function ProviderDirectory() {
         </section>
       ) : (
         <>
+          <ProviderCreateForm apiKey={apiKey} onCreated={handleCreated} />
           <div className="transaction-toolbar toolbar">
             <input
               className="search"
@@ -270,53 +309,82 @@ export function ProviderDirectory() {
                     </tr>
                   </thead>
                   <tbody>
-                    {providers.map((provider, index) => (
-                      <tr key={provider.id}>
-                        <td>
-                          <div className="agent-cell">
-                            <span
-                              className={`agent-avatar ${index % 3 === 0 ? "orange" : index % 3 === 1 ? "green" : "blue"}`}
-                              aria-hidden="true"
-                            >
-                              {initials(provider.name)}
-                            </span>
-                            <div className="cell-stack">
-                              <strong>{provider.name}</strong>
-                              <span>{provider.slug}</span>
+                    {providers.map((provider, index) => {
+                      const website = safeWebsite(provider.website_url);
+                      return (
+                        <tr key={provider.id}>
+                          <td>
+                            <div className="agent-cell">
+                              <span
+                                className={`agent-avatar ${index % 3 === 0 ? "orange" : index % 3 === 1 ? "green" : "blue"}`}
+                                aria-hidden="true"
+                              >
+                                {initials(provider.name)}
+                              </span>
+                              <div className="cell-stack">
+                                <strong>{provider.name}</strong>
+                                <span>{provider.slug}</span>
+                                {website ? (
+                                  <a
+                                    className="provider-website"
+                                    href={website.href}
+                                    aria-label={`Open provider website ${website.label} in a new tab`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {website.label}
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td>
-                          <code className="primary-cell mono" title={provider.id}>
-                            {shortId(provider.id)}
-                          </code>
-                        </td>
-                        <td>
-                          {provider.wallet_address ? (
-                            <code className="mono" title={provider.wallet_address}>
-                              {displayWallet(provider.wallet_address)}
-                            </code>
-                          ) : (
-                            <span className="muted">No wallet configured</span>
-                          )}
-                        </td>
-                        <td>{provider.environment}</td>
-                        <td>
-                          <span className={`status ${provider.is_verified ? "verified" : "neutral"}`}>
-                            {provider.is_verified ? "Verified" : "Unverified"}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`status ${statusTone(provider.status)}`}>
-                            {provider.status.charAt(0).toUpperCase() + provider.status.slice(1)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td>
+                            <div className="agent-id-cell">
+                              <code className="primary-cell mono" title={provider.id}>
+                                {shortId(provider.id)}
+                              </code>
+                              <button
+                                className="button ghost agent-copy-id"
+                                type="button"
+                                aria-label={`Copy provider ID ${provider.id}`}
+                                onClick={() => void copyProviderId(provider.id)}
+                              >
+                                {copiedProviderId === provider.id ? "Copied" : "Copy ID"}
+                              </button>
+                            </div>
+                          </td>
+                          <td>
+                            {provider.wallet_address ? (
+                              <code className="mono" title={provider.wallet_address}>
+                                {displayWallet(provider.wallet_address)}
+                              </code>
+                            ) : (
+                              <span className="muted">No wallet configured</span>
+                            )}
+                          </td>
+                          <td>{provider.environment}</td>
+                          <td>
+                            <span className={`status ${provider.is_verified ? "verified" : "neutral"}`}>
+                              {provider.is_verified ? "Verified" : "Unverified"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status ${statusTone(provider.status)}`}>
+                              {provider.status.charAt(0).toUpperCase() + provider.status.slice(1)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
+            {copyMessage ? (
+              <p className="agent-copy-feedback" role="status" aria-live="polite">
+                {copyMessage} {copyFallbackId ? <code className="mono">{copyFallbackId}</code> : null}
+              </p>
+            ) : null}
           </section>
         </>
       )}

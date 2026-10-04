@@ -16,7 +16,9 @@ from paxrelay_api.schemas import (
     PolicyAssignIn,
     PolicyAssignmentOut,
     PolicyCreate,
+    PolicyDetailOut,
     PolicyOut,
+    PolicyRulesOut,
 )
 from paxrelay_api.security.authorization import require_scope
 from paxrelay_api.tenant import tenant_owns
@@ -126,22 +128,35 @@ async def list_policies(
 
 @router.get(
     "/{policy_id}",
-    response_model=PolicyOut,
+    response_model=PolicyDetailOut,
     dependencies=[Depends(require_scope("policies:read"))],
 )
-async def get_policy(policy_id: UUID, session: SessionDep, tenant: TenantDep) -> PolicyOut:
+async def get_policy(
+    policy_id: UUID, session: SessionDep, tenant: TenantDep
+) -> PolicyDetailOut:
     repo = SqlAlchemyPolicyRepository(session)
     policy = await repo.get(policy_id)
     # Treat a cross-tenant resource as not-found to avoid information leakage.
     if policy is None or not tenant_owns(tenant, policy):
         raise NotFoundError(f"Policy {policy_id} not found.")
-    return PolicyOut(
+    assignments = await repo.list_assignments(policy_id)
+    return PolicyDetailOut(
         id=policy.id,
         name=policy.name,
         description=policy.description,
         mode=policy.mode.value,
         version=policy.version,
         is_active=policy.is_active,
+        rules=PolicyRulesOut.model_validate(policy.rules.model_dump(mode="json")),
+        assignments=[
+            PolicyAssignmentOut(
+                id=assignment.id,
+                agent_id=assignment.agent_id,
+                policy_id=assignment.policy_id,
+                assigned_at=assignment.assigned_at,
+            )
+            for assignment in assignments
+        ],
     )
 
 

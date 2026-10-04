@@ -12,6 +12,15 @@ export interface ProviderRecord {
   status: string;
   is_verified: boolean;
   description: string | null;
+  website_url: string | null;
+}
+
+export interface ProviderCreateInput {
+  name: string;
+  slug: string;
+  wallet_address: string | null;
+  description: string | null;
+  website_url: string | null;
 }
 
 export interface ProviderFilters {
@@ -42,5 +51,14 @@ export function useProviders(
     staleTime: 10_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+  });
+}
+
+export function createProvider(token: string, input: ProviderCreateInput) {
+  return apiFetch<ProviderRecord>("/v1/providers", {
+    method: "POST",
+    token,
+    body: JSON.stringify(input),
+    cache: "no-store",
   });
 }

@@ -121,7 +121,7 @@ successful creates return HTTP 201 and list routes return newest records first.
 
 | Method and path | Purpose |
 | --- | --- |
-| `POST /agents` | Create an agent in the authenticated project. |
+| `POST /agents` | Create an agent in the authenticated project; requires `agents:write`. |
 | `GET /agents` | List agents; supports `status`, `search`, `limit` (1–100, default 50), and `offset`. |
 | `GET /agents/{agent_id}` | Get one agent. |
 | `GET /agents/{agent_id}/wallet` | Get the agent's primary wallet record. |
@@ -144,7 +144,7 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 
 | Method and path | Purpose |
 | --- | --- |
-| `POST /providers` | Register a provider in the current project. |
+| `POST /providers` | Register a provider in the current project; requires `providers:write`. |
 | `GET /providers` | List providers; supports `status`, `search`, `limit` (1–100, default 100), and `offset`. |
 | `GET /providers/{provider_id}` | Get one provider. |
 | `POST /services/providers/{provider_id}` | Publish a service for a provider and create its initial immutable version and metrics. |
@@ -171,20 +171,25 @@ services can be used for paid calls. The gateway also requires one whenever the
 live payment adapter is enabled. Mock-only development can use the demo
 destination.
 
+Provider creation accepts an optional `website_url` limited to HTTP(S). The
+provider response includes that URL along with the registered profile fields.
+
 ### Policies
 
 | Method and path | Purpose |
 | --- | --- |
 | `POST /policies` | Create a policy. |
 | `GET /policies` | List policies; supports `mode`, `is_active`, `search`, `limit` (1–100, default 50), and `offset`. |
-| `GET /policies/{policy_id}` | Get one policy. |
+| `GET /policies/{policy_id}` | Get one tenant-scoped policy, including its complete rules and current agent assignments. |
 | `POST /policies/{policy_id}/assign` | Assign a policy to an agent using `{"agent_id":"<uuid>"}`. |
 
 The create body accepts `mode`, `maximum_per_call`, `daily_budget`,
 `monthly_budget`, `allowed_capabilities`, `allowed_providers`,
-`blocked_providers`, and `approval_threshold`. Allowed modes are `observe`,
-`warn`, and `enforce`. The route returns policy metadata, not the full rule
-configuration.
+`blocked_providers`, and `approval_threshold`. Monetary amounts use
+`{"amount_atomic":1230000,"currency":"USDX","decimals":6}`. Allowed modes
+are `observe`, `warn`, and `enforce`. The list and create routes return policy
+metadata; the detail route returns the complete rule configuration and current
+agent assignments.
 
 ### Human approvals
 

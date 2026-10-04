@@ -1250,12 +1250,294 @@ img {
   min-width: 820px;
 }
 
+.agent-create-section,
+.resource-create-section {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.agent-create-card,
+.resource-create-card {
+  width: 100%;
+}
+
+.agent-create-form,
+.resource-create-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.agent-form-field,
+.resource-form-field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-form-field input,
+.agent-form-field textarea,
+.resource-form-field input,
+.resource-form-field textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-form-field textarea,
+.resource-form-field textarea {
+  min-height: 78px;
+  padding-block: 10px;
+  resize: vertical;
+}
+
+.agent-form-field small,
+.resource-form-field small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.agent-form-wide,
+.resource-form-wide {
+  grid-column: 1 / -1;
+}
+
+.agent-create-success,
+.resource-create-success {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 15px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--ember);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.agent-create-success code,
+.resource-create-success code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.agent-id-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-copy-id {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.agent-copy-feedback {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 12px 20px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-copy-feedback code {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
 .policy-directory-table {
-  min-width: 720px;
+  min-width: 820px;
+}
+
+.policy-create-section {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.policy-create-card {
+  width: 100%;
+}
+
+.policy-create-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.policy-form-field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.policy-form-field input,
+.policy-form-field select,
+.policy-form-field textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.policy-form-field textarea {
+  min-height: 84px;
+  padding-block: 10px;
+  resize: vertical;
+}
+
+.policy-form-wide {
+  grid-column: 1 / -1;
+}
+
+.policy-form-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.policy-detail-table-row > td {
+  padding: 0;
+  white-space: normal;
+}
+
+.policy-detail-content {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  background: var(--soft);
+}
+
+.policy-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+}
+
+.policy-rule-note {
+  max-width: 900px;
+  margin: 10px 0 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--ember);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.policy-rule-grid > div {
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.policy-rule-grid dt {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.policy-rule-grid dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.policy-assignment-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr);
+  gap: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.policy-assignment-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.policy-assignment-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--chalk);
+}
+
+.policy-assignment-list li span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.policy-assign-form {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.policy-assignment-confirm {
+  padding: 13px;
+  border: 1px solid rgba(252, 80, 0, 0.35);
+  border-radius: 12px;
+  background: var(--chalk);
+}
+
+.policy-assignment-confirm p {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.policy-detail-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px;
 }
 
 .provider-directory-table {
   min-width: 900px;
+}
+
+.provider-website {
+  width: fit-content;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--relay-deep);
+  font-size: 11px;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .service-directory-table {
@@ -3049,8 +3331,34 @@ img {
   }
 
   .api-key-create-form,
-  .api-key-scope-grid {
+  .api-key-scope-grid,
+  .agent-create-form,
+  .resource-create-form,
+  .policy-create-form,
+  .policy-rule-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-create-form,
+  .resource-create-form {
+    padding-inline: 16px;
+  }
+
+  .agent-create-section,
+  .agent-create-section > .button,
+  .agent-create-card .page-actions,
+  .agent-create-card .page-actions .button,
+  .resource-create-section,
+  .resource-create-section > .button,
+  .resource-create-card .page-actions,
+  .resource-create-card .page-actions .button {
+    width: 100%;
+  }
+
+  .agent-create-success,
+  .resource-create-success {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .api-key-create-form {
@@ -3059,6 +3367,18 @@ img {
 
   .api-key-create-form .page-actions,
   .api-key-create-form .page-actions .button {
+    width: 100%;
+  }
+
+  .policy-create-form {
+    padding-inline: 16px;
+  }
+
+  .policy-assignment-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .policy-assign-form .button {
     width: 100%;
   }
 

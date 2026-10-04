@@ -208,6 +208,32 @@ by key creation once, keep it in page memory, and make revocation an explicit
 confirmed action. Do not imply that network defaults or other workspace
 preferences can be changed until the API supports them.
 
+Agents supports registering an agent in the current project and environment.
+Read the directory with `agents:read`; require `agents:write` to register an
+agent. A key with both scopes can complete both actions in one session.
+Generate a lowercase slug from the agent name, allow the operator to edit it,
+and validate the optional wallet address before submission. Explain that a
+wallet address is only linked as agent metadata; registration does not connect
+a wallet or enable payments. After creation, show the full agent ID with a
+copy action so it can be assigned to a policy.
+
+Providers supports registering provider profiles with `providers:write` and
+reading the directory with `providers:read`. Collect a name, editable slug,
+optional public website, description, and payment wallet address. Explain that
+production requires a payment address and that recording an address does not
+prove ownership. Return the provider UUID with a copy action, refresh the
+directory after creation, and show safe HTTP(S) website links in the provider
+list. Do not present registration as ownership verification or as evidence of
+live service health.
+
+Policies supports creation of the rule fields accepted by the API, exact USDX
+limits, full rule inspection, and assignment to an agent by UUID. Keep rule
+details in an expandable row so operators can review a policy without losing
+their place in the directory. Policy creation and assignment require
+`policies:write`; detail reads require `policies:read`. Mark allowed contracts,
+maximum drawdown, and session expiry as stored but not enforced. Explain that
+the gateway currently supplies no consecutive-failure history.
+
 Keep the page order: title and workspace context; relay, settlement, success,
 and attention metrics; a request lifecycle; recent transactions; approval
 requests; then spend trend and operational activity. Every metric includes its

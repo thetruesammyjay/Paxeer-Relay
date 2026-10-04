@@ -14,6 +14,13 @@ export interface Agent {
   created_at: string;
 }
 
+export interface AgentCreateInput {
+  name: string;
+  slug: string;
+  wallet_address: string | null;
+  description: string | null;
+}
+
 /** Fetch the latest agents for the tenant represented by this key session. */
 export function useAgents(token: string, connectionId: string) {
   return useQuery({
@@ -28,5 +35,14 @@ export function useAgents(token: string, connectionId: string) {
     staleTime: 10_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+  });
+}
+
+export function createAgent(token: string, input: AgentCreateInput) {
+  return apiFetch<Agent>("/v1/agents", {
+    method: "POST",
+    token,
+    body: JSON.stringify(input),
+    cache: "no-store",
   });
 }

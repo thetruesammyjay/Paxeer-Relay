@@ -88,7 +88,9 @@ class ProviderCreate(BaseModel):
         default=None, max_length=42, pattern=r"^0x[0-9a-fA-F]{40}$"
     )
     description: str | None = None
-    website_url: str | None = None
+    website_url: str | None = Field(
+        default=None, max_length=2048, pattern=r"^https?://"
+    )
 
 
 class ProviderOut(BaseModel):
@@ -102,6 +104,7 @@ class ProviderOut(BaseModel):
     status: str
     is_verified: bool
     description: str | None
+    website_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +206,29 @@ class PolicyAssignmentOut(BaseModel):
     agent_id: UUID
     policy_id: UUID
     assigned_at: datetime
+
+
+class PolicyRulesOut(BaseModel):
+    maximum_per_call: MoneyIn | None = None
+    daily_budget: MoneyIn | None = None
+    monthly_budget: MoneyIn | None = None
+    allowed_capabilities: list[str] = Field(default_factory=list)
+    allowed_providers: list[str] = Field(default_factory=list)
+    blocked_providers: list[str] = Field(default_factory=list)
+    allowed_contracts: list[str] = Field(default_factory=list)
+    minimum_provider_reputation: float | None = None
+    minimum_provider_success_rate: float | None = None
+    maximum_accepted_latency_ms: int | None = None
+    approval_threshold: MoneyIn | None = None
+    maximum_consecutive_failures: int | None = None
+    maximum_drawdown: MoneyIn | None = None
+    session_expiry_seconds: int | None = None
+    allowed_currencies: list[str] = Field(default_factory=list)
+
+
+class PolicyDetailOut(PolicyOut):
+    rules: PolicyRulesOut
+    assignments: list[PolicyAssignmentOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
