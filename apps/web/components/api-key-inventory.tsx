@@ -80,15 +80,15 @@ function requestErrorMessage(
   action: "load" | "create" | "revoke",
 ) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
     if (error.status === 403) {
       if (action === "load") {
-        return "This key needs api-keys:read access for this project and environment.";
+        return "Your current project access needs api-keys:read permission to view the inventory.";
       }
       if (action === "revoke") {
-        return "The connected key needs api-keys:write access to revoke keys.";
+        return "Your current project access needs api-keys:write permission to revoke keys.";
       }
-      return "The connected key cannot grant one or more selected scopes. It can only grant permissions it already has.";
+      return "Your current project access cannot create a key with one or more selected permissions.";
     }
     if (error.status === 404 && action === "revoke") {
       return "That API key was not found in this project and environment. Refresh the list and try again.";
@@ -314,7 +314,7 @@ export function ApiKeyInventory() {
           <div>
             <h2>Project access keys will appear here</h2>
             <p>
-              Connect a key with <code>api-keys:read</code> to review the
+              Connect to a workspace with <code>api-keys:read</code> access to review the
               inventory. Creating and revoking keys also requires
               <code> api-keys:write</code>. Secrets are never shown in the
               inventory.
@@ -393,8 +393,8 @@ export function ApiKeyInventory() {
                   <h2 className="card-title">Create an API key</h2>
                   <p className="card-description">
                     Choose only the permissions this integration needs. The API
-                    limits new key permissions to those held by the connected
-                    key.
+                    limits new key permissions to those granted to your current
+                    project access.
                   </p>
                 </div>
               </header>
@@ -457,7 +457,7 @@ export function ApiKeyInventory() {
                       ))}
                     </div>
                     <p>
-                      A new key cannot receive permissions the connected key
+                      A new key cannot receive permissions your current role
                       does not hold. The API also checks that the selected type
                       matches the project environment.
                     </p>
@@ -483,7 +483,7 @@ export function ApiKeyInventory() {
             <section className="card data-access-empty" role="note">
               <h3>Read-only key access</h3>
               <p>
-                This key can review the inventory. Connect a key that also has
+                Your role can review the inventory. Ask an owner to grant
                 <code> api-keys:write</code> to create or revoke keys.
               </p>
             </section>

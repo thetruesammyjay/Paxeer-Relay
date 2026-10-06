@@ -9,8 +9,9 @@ import type {
   ReconciliationStatus,
   SettlementReconciliation,
 } from "@/hooks/use-settlement-reconciliation";
-import { ApiError } from "@/lib/api-client";
-import { useApiSession } from "@/lib/api-session";
+import { ApiError, OIDC_SESSION_TOKEN } from "@/lib/api-client";
+import { dashboardRequiresSso, useApiSession } from "@/lib/api-session";
+import Link from "next/link";
 import { StatusBadge } from "@/components/status-badge";
 
 const FILTERS: { value: ReconciliationStatus; label: string }[] = [
@@ -62,10 +63,10 @@ function shortId(value: string): string {
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      return "The API key was not accepted. Check the key and try again.";
+      return "Your workspace session is no longer valid. Sign in again or reconnect your development key.";
     }
     if (error.status === 403) {
-      return "This key needs settlements:read access for the same project and environment.";
+      return "Your project role or development key needs settlements:read access.";
     }
     if (error.status === 404) {
       return "The settlements endpoint was not found. Check that the API is running the current version.";
@@ -175,8 +176,11 @@ export function SettlementReview() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const pageIndex = cursors.length - 1;
   const cursor = cursors[pageIndex] ?? null;
+  const lacksReadAccess = Boolean(
+    apiSession.workspace && !apiSession.workspace.scopes.includes("settlements:read"),
+  );
   const query = useSettlementReconciliation({
-    token: token || undefined,
+    token: lacksReadAccess ? undefined : token || undefined,
     connectionVersion,
     status,
     cursor,
@@ -296,26 +300,45 @@ export function SettlementReview() {
             />
           </span>
           <div>
-            <h2 id="settlement-access-title">Connect a read-only API key</h2>
+            <h2 id="settlement-access-title">Settlement access</h2>
             <p>
-              Use a production key with <code>settlements:read</code> access.
-              The API verifies the project and production environment before
-              reconciliation data is loaded.
+              Reconciliation data is read-only and requires <code>settlements:read</code>
+              access for the selected project. Production uses your team sign-in.
             </p>
           </div>
         </div>
 
-        {keyFormOpen || !token ? (
+        {dashboardRequiresSso() ? (
+          <div className="settlement-connected">
+            <span className={`settlement-connection-state ${apiSession.error ? "error" : apiSession.workspace ? "connected" : "pending"}`}>
+              <i aria-hidden="true" />
+              {apiSession.workspace
+                ? `${apiSession.apiKey === OIDC_SESSION_TOKEN ? "Team sign-in" : "Workspace session"} connected as ${apiSession.workspace.role}`
+                : apiSession.status === "checking"
+                  ? "Checking team access"
+                  : apiSession.status === "selecting"
+                    ? "Choose a project in the workspace control"
+                    : "Team project sign-in required"}
+            </span>
+            {apiSession.error ? <span className="api-session-error" role="alert">{apiSession.error}</span> : null}
+            {lacksReadAccess ? (
+              <span className="api-session-error" role="alert">
+                Your project role does not include <code>settlements:read</code>.
+              </span>
+            ) : null}
+            {!apiSession.isSignedIn ? <Link className="button primary" href="/sign-in">Sign in with your team</Link> : null}
+          </div>
+        ) : keyFormOpen || !token ? (
           <form className="settlement-key-form" onSubmit={(event) => void connect(event)}>
             <label className="settlement-key-field">
-              <span>API key</span>
+              <span>Development API key</span>
               <input
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
                 value={draftToken}
                 onChange={(event) => setDraftToken(event.target.value)}
-                placeholder="Paste a production API key"
+                placeholder="Paste a development API key"
                 aria-describedby="settlement-key-note"
                 required
               />
@@ -325,7 +348,7 @@ export function SettlementReview() {
               type="submit"
               disabled={!draftToken.trim()}
             >
-              Connect key
+              Connect development key
             </button>
             {token ? (
               <button
@@ -340,8 +363,8 @@ export function SettlementReview() {
               </button>
             ) : null}
             <p id="settlement-key-note" className="settlement-key-note">
-              Only production keys are accepted. The key stays in memory across
-              dashboard pages and is cleared when you disconnect or reload.
+              This key is for local development only. It stays in memory across
+              dashboard pages and clears when you disconnect or reload.
             </p>
             {apiSession.error ? (
               <p className="api-session-error" role="alert">{apiSession.error}</p>
@@ -351,7 +374,7 @@ export function SettlementReview() {
           <div className="settlement-connected">
             <span className={`settlement-connection-state ${query.isError ? "error" : "connected"}`}>
               <i aria-hidden="true" />
-              {query.isError ? "Connection needs attention" : "Key connected for this tab"}
+              {query.isError ? "Connection needs attention" : "Development key connected"}
             </span>
             <button
               className="button ghost"
@@ -380,7 +403,7 @@ export function SettlementReview() {
             <h2 id="settlement-queue-title">Reconciliation queue</h2>
             <p>Records refresh automatically every 30 seconds.</p>
           </div>
-          {token ? (
+          {token && !lacksReadAccess ? (
             <button
               className="button"
               type="button"
@@ -409,9 +432,13 @@ export function SettlementReview() {
           <span className="settlement-result-count" aria-live="polite">
             {query.isSuccess
               ? `${items.length} ${items.length === 1 ? "record" : "records"} on this page`
-              : token
+              : lacksReadAccess
+                ? "Settlement permission required"
+                : token
                 ? "Waiting for records"
-                : "Connect a key to view records"}
+                : dashboardRequiresSso()
+                  ? "Sign in and choose a project to view records"
+                  : "Connect a development key to view records"}
           </span>
         </div>
 
@@ -425,19 +452,24 @@ export function SettlementReview() {
                 strokeWidth={1.7}
               />
             </span>
-            <h3>Connect a key to open the queue</h3>
-            <p>Records are scoped to the project and environment on your API key.</p>
+            <h3>{dashboardRequiresSso() ? "Connect to a project to open the queue" : "Connect a development key to open the queue"}</h3>
+            <p>Records are scoped to your project role and environment.</p>
+          </div>
+        ) : lacksReadAccess ? (
+          <div className="settlement-empty settlement-empty-error" role="status">
+            <h3>Settlement records are not available to this role</h3>
+            <p>Ask a project owner to grant <code>settlements:read</code> access.</p>
           </div>
         ) : query.isPending ? (
           <div className="settlement-empty" role="status">
             <span className="settlement-loading-mark" aria-hidden="true" />
             <h3>Loading reconciliation records</h3>
-            <p>The API key and project access are being checked.</p>
+            <p>Your project access is being checked.</p>
           </div>
         ) : query.isError ? (
           <div className="settlement-empty settlement-empty-error">
             <h3>Records are unavailable</h3>
-            <p>Update the API key or retry the request when the API is reachable.</p>
+            <p>Check your project access or retry when the API is reachable.</p>
           </div>
         ) : items.length === 0 ? (
           <div className="settlement-empty">

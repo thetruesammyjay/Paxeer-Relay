@@ -9,6 +9,9 @@ dependencies = [
     "paxrelay-domain",
 ]
 
+[project.scripts]
+paxrelay-validate-402lxp-offer = "paxrelay_paxeer.offer_cli:main"
+
 [tool.uv.sources]
 paxrelay-domain = { workspace = true }
 

@@ -72,8 +72,8 @@ function parseFailureThreshold(value: string): number | null {
 
 function createErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs policies:write access to create policies.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs policies:write permission to create policies.";
     if (error.status === 422) return "The policy contains an invalid capability, amount, provider, or threshold.";
     return `Policy creation failed (HTTP ${error.status}). Try again shortly.`;
   }

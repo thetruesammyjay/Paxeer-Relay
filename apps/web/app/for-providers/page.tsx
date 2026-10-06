@@ -51,7 +51,7 @@ export default function ForProvidersPage() {
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-button landing-button-ember" href="/creator">
-                Preview the provider workspace <span aria-hidden="true">↗</span>
+                Open the provider workspace <span aria-hidden="true">↗</span>
               </Link>
               <Link className="landing-text-link" href="/how-it-works">
                 See the request flow <span aria-hidden="true">→</span>
@@ -88,15 +88,16 @@ export default function ForProvidersPage() {
 
         <Reveal as="section" className="marketing-callout">
           <div>
-            <p className="landing-eyebrow">EARLY PRODUCT PREVIEW</p>
+            <p className="landing-eyebrow">LIVE PROJECT RECORDS</p>
             <h2>Explore the provider dashboard.</h2>
             <p>
-              The creator workspace shows a sample provider experience. Service
-              setup and payment workflows are not connected yet.
+              The creator workspace reads live services, transactions, and
+              receipts from the selected project. Provider-specific onboarding
+              and self-service payment setup are still being built.
             </p>
           </div>
           <Link className="landing-button landing-button-ember" href="/creator">
-            Open provider preview <span aria-hidden="true">↗</span>
+            Open the provider workspace <span aria-hidden="true">↗</span>
           </Link>
         </Reveal>
       </main>

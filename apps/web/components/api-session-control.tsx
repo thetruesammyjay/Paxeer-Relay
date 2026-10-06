@@ -185,7 +185,7 @@ export function ApiSessionControl() {
                 type="submit"
                 disabled={busy || !draft.trim()}
               >
-                {busy ? "Verifying key…" : "Connect production workspace"}
+                {busy ? "Verifying key…" : "Connect development workspace"}
               </button>
             </form>
           )}

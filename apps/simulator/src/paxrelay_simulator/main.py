@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from paxrelay_simulator.config import get_settings
 from paxrelay_simulator.lxp402.routes import router as lxp402_router
 from paxrelay_simulator.layerx.routes import router as layerx_router
+from paxrelay_simulator.providers.demo import router as demo_provider_router
 from paxrelay_simulator.providers.routes import router as providers_router
 
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(lxp402_router)
     app.include_router(layerx_router)
     app.include_router(providers_router)
+    app.include_router(demo_provider_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

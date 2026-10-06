@@ -1,130 +1,109 @@
 # Paxeer and LayerX protocol integration
 
-PaxRelay isolates network-specific work behind `packages/paxeer-adapter`.
-Gateway and worker code should depend on the adapter interfaces rather than
-constructing protocol clients directly.
+PaxRelay keeps network-specific code behind `packages/paxeer-adapter`. The
+published LayerX 402LXP HTTP contract is version 2. The previous PaxRelay
+payment prototype used a different JSON quote plus guessed REST lookups; those
+lookups are not evidence of a LayerX payment.
 
-## Adapter interfaces
+## Published 402LXP HTTP v2 contract
 
-The package defines four async protocols:
+The official [402LXP HTTP per-call payment contract](https://www.paxeer.app/features/layerx-402lxp-http-payments)
+defines this exchange:
 
-| Interface | Responsibilities |
-| --- | --- |
-| `WalletAdapter` | Read wallet and wallet policy, verify a session proof, read balance. |
-| `PaymentAdapter` | Build a payment requirement, verify payment proof, read payment status. |
-| `RegistryAdapter` | Publish a service, find services by capability, read provider history. |
-| `SettlementAdapter` | Read settlement and batch records and verify an L1 commitment against a Paxeer JSON-RPC receipt. |
+1. The resource returns HTTP `402` and a base64 JSON envelope in
+   `PAYMENT-REQUIRED`.
+2. The envelope has `x402Version: 2`, a resource URL, and 1–32 payment
+   alternatives. Each alternative names its scheme, `layerx:<id>` network,
+   32-byte asset, atomic amount, 32-byte `payTo` recipient, timeout, and any
+   LayerX commitment requirement.
+3. The buyer selects an offer without changing it and sends a
+   `PAYMENT-SIGNATURE` containing canonical LayerX receipt evidence or an
+   allowed signed grant draw.
+4. The seller verifies evidence at the required commitment level. A successful
+   response carries `PAYMENT-RESPONSE` with settlement reference
+   `lxp:<receipt_digest>`.
 
-`MockPaxeerAdapter` and `OfficialPaxeerAdapter` implement these surfaces. The
-gateway currently selects the mock adapter by default with
-`use_mock_adapter=true`.
+For the reproducible exact-payment demo, the commitment is `executed`. The
+other documented levels are `batched` and `finalised` (the spelling
+`finalized` is invalid). An HTTP success, queue acknowledgement, or submitted
+activity ID is not payment evidence. The transport is LayerX JSON-RPC at
+`POST /rpc`; the merchant settlement route is `POST /v1/settle`.
 
-## Official adapter assumptions
+## What this repository validates today
 
-The current official adapter is an HTTP client prototype. It assumes these
-relative paths under the configured RPC/API base URLs:
+`packages/paxeer-adapter/src/paxrelay_paxeer/x402_http.py` strictly decodes and
+checks a `PAYMENT-REQUIRED` header: protocol version, envelope size, duplicate
+JSON keys, resource URL, alternative count, scheme, network, address lengths,
+canonical amount, timeout, and commitment value. The command-line probe sends
+one request without payment and checks the returned offer:
 
-| Operation | Assumed request |
-| --- | --- |
-| Wallet read | `GET /wallets/{address}` |
-| Wallet policy read | `GET /wallets/{address}/policy` |
-| Session proof check | `POST /sessions/verify` with `{"proof":"..."}` |
-| Balance read | `GET /wallets/{address}/balance?currency=USDX` |
-| Service publish | `POST /registry/services` |
-| Service search | `GET /registry/services?capability=...` |
-| Provider history | `GET /registry/providers/{provider_id}/history` |
-| Payment status by local payment ID | No verified route is configured; the adapter returns `unknown`. Reconciliation uses the stored LayerX transaction hash instead. |
-| LayerX transaction read | `GET /transactions/{transaction_hash}` under LayerX API URL |
-| LayerX batch read | `GET /batches/{batch_id}` under LayerX API URL |
-| Paxeer settlement record | `GET /settlement/{settlement_id}` under `PAXEER_SETTLEMENT_API_URL` |
+```powershell
+uv run --package paxrelay-paxeer python -m paxrelay_paxeer.offer_cli `
+  https://provider.example/v1/search `
+  --method POST `
+  --json-body '{"query":"PaxRelay"}'
+```
 
-These request shapes are code assumptions and have not been demonstrated
-against authoritative production endpoints in this repository. Confirm the
-official API paths, authentication, response schemas, finality semantics,
-timeouts, and retry behavior before enabling live integration.
+The probe never sends `PAYMENT-SIGNATURE` and never pays. Its success means
+only that the provider's offer matches the checked envelope shape; it does not
+verify a receipt, settle funds, or qualify an endpoint for production.
 
-The official [Paxeer JSON-RPC reference](https://docs.paxeer.app/api-reference)
-documents the standard EVM RPC surface. The [Paxeer and LayerX integration
-guide](https://docs.paxeer.app/paxeer-vs-layerx/) directs applications to use a
-LayerX receipt for the activity and a Paxeer transaction receipt for its
-on-chain operation, with the environment's contract ABI and address. The HTTP
-resource paths above are not established by those references.
+## Current implementation boundary
 
-## L1 receipt verification
+The gateway currently returns a PaxRelay-specific JSON `402` body. That body
+is not the published HTTP v2 `PAYMENT-REQUIRED` header. The SDK buyer flow,
+LayerX receipt resolution and signature verification, payment response
+handling, and official JSON-RPC read methods are not integrated yet.
 
-The reconciliation worker does not accept `l1_anchored: true` or a matching
-commitment returned by an HTTP endpoint as proof of anchoring. It checks the
-settlement's claimed L1 transaction with the configured Paxeer JSON-RPC URL:
+Accordingly:
 
-1. `eth_chainId` must match `PAXEER_CHAIN_ID`.
-2. `eth_getTransactionReceipt` must return the claimed transaction hash, a
-   successful status, and the claimed block number.
-3. `eth_getBlockByNumber` must return the same canonical block hash as the
-   receipt, and `eth_blockNumber` must show the configured confirmation depth.
-4. The receipt must contain a log from the configured settlement contract with
-   the configured event signature topic. The exact 32-byte commitment must
-   appear as an indexed event topic or a 32-byte ABI data word.
+- `OfficialPaxeerAdapter.create_payment_requirement` retains the legacy
+  PaxRelay quote format for compatibility; it is not an official v2 offer.
+- `OfficialPaxeerAdapter.verify_payment` now fails closed with
+  `layerx_402lxp_v2_verifier_not_integrated`.
+- The old undocumented `/transactions/{hash}` and `/batches/{id}` REST reads
+  are disabled. They cannot authorize provider execution or reconciliation.
+- The remaining wallet, registry, and settlement REST surfaces in the partial
+  adapter also need contract confirmation before they can be treated as
+  authoritative network data.
+- Use `USE_MOCK_ADAPTER=true` only for the clearly labelled local simulation.
+  A mock response is not a testnet or real payment.
 
-Production requires `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS`,
+The official Python SDK is documented in the upstream Paxeer X repository's
+[`agent/sdk/python` directory](https://github.com/Sidiora-Labs/Paxeer-X-Network/tree/main/agent/sdk/python)
+and [payment guide](https://github.com/Sidiora-Labs/Paxeer-X-Network/blob/main/docs/wiki/PaymentsQuickstart.md).
+The integration still needs a pinned SDK release, configured
+LayerX test-network RPC and credentials, a test payer with funds, an exact
+payment offer, receipt resolution, signed receipt verification, replay-safe
+settlement, and an end-to-end staging run. Do not set the adapter to a live
+environment and describe it as payment-enabled before those checks pass.
+
+## Paxeer L1 settlement
+
+LayerX executed receipts and Paxeer L1 commitments are separate evidence. The
+existing reconciliation verifier checks the configured Paxeer JSON-RPC
+receipt for a successful transaction, canonical block, confirmation depth,
+configured contract address, and commitment event topic. This only proves the
+configured event was emitted. It does not independently decode an arbitrary
+contract ABI or recompute the LayerX batch commitment.
+
+Production values for `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS`,
 `PAXEER_L1_COMMITMENT_EVENT_TOPIC`, and
-`PAXEER_L1_CONFIRMATION_BLOCKS`. Obtain these values and the finality policy
-from the Paxeer operator. The verifier supports an event where the commitment
-is emitted as a `bytes32` value; it does not decode arbitrary ABI layouts or
-independently recompute a LayerX batch commitment. LayerX and Paxeer REST
-resources remain assumed contracts and must be confirmed against authoritative
-services. Batch IDs are opaque LayerX references, not EVM transaction hashes.
-Until the configuration and response contract are confirmed, do not use
-reconciliation as authorization to release funds.
+`PAXEER_L1_CONFIRMATION_BLOCKS` must come from the operator and the deployed
+contract. A LayerX activity can be `executed` without an L1 settlement; do not
+present an execution receipt as an L1-finalized payment.
 
-## 402LXP requirement and proof checks
+## Adapter responsibilities
 
-The adapter builds a version 1 requirement containing scheme `402LXP`, network
-`paxeer`, the configured chain ID (125 for the current production target),
-settlement layer `layerx`, currency USDX, decimals, atomic amount, recipient,
-quote ID, request hash, expiry, and nonce.
+| Interface | Responsibility |
+| --- | --- |
+| `WalletAdapter` | Read wallet state and verify a wallet session. |
+| `PaymentAdapter` | Build the internal quote and verify payment evidence. |
+| `RegistryAdapter` | Publish/search services and read provider history. |
+| `SettlementAdapter` | Read payment settlement and verify configured L1 commitment evidence. |
 
-Before adapter verification, the gateway compares proof claims to the stored
-quote and rejects an expired quote or mismatched quote ID, request hash,
-amount, recipient, nonce, chain ID, or scheme. The official adapter then
-requires a 32-byte hexadecimal LayerX transaction hash and queries LayerX to
-confirm amount, recipient, and quote ID (or memo). The proof must decode to a
-JSON object. Amounts must be integers or decimal integer strings; malformed
-claims and malformed LayerX JSON are rejected as failed verification.
-
-The official code currently expects the submitted proof to be JSON containing
-those fields. It does not implement wallet signing, transaction submission,
-or client-side payment initiation. The agent or its wallet is responsible for
-paying outside the gateway flow.
-
-## Mock adapter and simulator
-
-The mock adapter makes no network calls and returns fabricated wallet,
-verification, transaction, registry, and settlement data. Its nonce replay
-set is process-local. The separate `apps/simulator` service also fabricates
-results and keeps its service registry in memory. These tools are suitable for
-local flow demonstrations only.
-
-## Integration checklist
-
-Before an adapter can be considered production-ready:
-
-1. Replace assumed endpoints with official, versioned API contracts.
-2. Validate chain ID and network identity at startup.
-3. Use authenticated TLS connections and bounded timeouts.
-4. Parse amounts as integers and verify recipient, currency, quote, chain,
-   nonce, expiry, and settlement destination from authoritative data.
-5. Verify the gateway's atomic PostgreSQL nonce claim with concurrent
-   submissions, then validate LayerX transaction replay semantics against the
-   authoritative service.
-6. Confirm the settlement event ABI, deployment address, confirmation depth,
-   and exact relationship between LayerX batch contents and the committed
-   value. Define what “verified”, LayerX-settled, and L1-anchored mean and how
-   to transition among them.
-7. Add adapter contract tests against a controlled simulator and a staging
-   endpoint.
-8. Fail closed when upstream proof or settlement data is missing or
-   contradictory.
-
-Do not switch `USE_MOCK_ADAPTER` off in production merely because the HTTP
-adapter can reach a URL. A reachable endpoint does not confirm that its
-contract or settlement semantics are correct.
+Before a live adapter is qualified, its endpoint paths, authentication,
+response schemas, signature and receipt checks, finality semantics, timeout,
+retry, and idempotency behavior must be covered by upstream contract fixtures
+and a controlled test-network transaction. Network reachability alone is not
+contract validation.

@@ -26,11 +26,13 @@ which parts are present in the current checkout.
 
 - [402LXP flow](402lxp-flow.md) — quote, challenge, proof verification, provider
   execution, and receipt lifecycle.
+- [One repeatable demo](DEMO-RUNBOOK.md) — local simulated paid request and a
+  read-only 402LXP v2 offer check.
 - [Policy engine](policy-engine.md) — rule order, modes, and enforcement gaps.
 - [Provider routing](provider-routing.md) — hard filters, scores, strategies,
   and failover status.
 - [Paxeer and LayerX integration](protocol-integration.md) — adapter
-  interfaces, assumed endpoints, and verification requirements.
+  interfaces, the published HTTP v2 contract, and current integration limits.
 - [MCP integration](mcp-integration.md) — current status and the intended
   provider/agent adapter boundary.
 - [Execution receipts](execution-receipts.md) — receipt contents,

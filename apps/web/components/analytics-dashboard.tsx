@@ -90,7 +90,7 @@ export function AnalyticsDashboard() {
           <div>
             <h2>Your workspace data will appear here</h2>
             <p>
-              Connect a key to see spend totals and a breakdown by capability.
+              Connect to a workspace to see its spend totals and capability breakdown.
               No sample figures are shown on this page.
             </p>
           </div>

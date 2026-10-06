@@ -46,8 +46,8 @@ function formatAssignedDate(value: string) {
 
 function assignmentErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs policies:write access to assign a policy.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs policies:write permission to assign a policy.";
     if (error.status === 404) return "The agent was not found in this project and environment.";
     if (error.status === 409) return "This policy is already assigned to that agent.";
     if (error.status === 422) return "Enter a valid agent UUID.";
@@ -58,8 +58,8 @@ function assignmentErrorMessage(error: unknown) {
 
 function detailErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key expired or was rejected. Connect an active key and try again.";
-    if (error.status === 403) return "This key needs policies:read access to inspect rule details.";
+    if (error.status === 401) return "Your workspace session expired or was rejected. Sign in again or reconnect your development key.";
+    if (error.status === 403) return "Your current project access needs policies:read permission to inspect rule details.";
     if (error.status === 404) return "This policy is no longer available in the connected project.";
     return `Policy details could not be loaded (HTTP ${error.status}). Try again shortly.`;
   }
@@ -283,7 +283,7 @@ export function PolicyDetailRow({ policy, apiKey, connectionId }: PolicyDetailRo
                       />
                     </label>
                     <p className="policy-form-hint">
-                      Copy the ID from the <a href="/agents" target="_blank" rel="noreferrer">Agents page (opens in a new tab)</a> so this key session stays connected. Assignment requires policies:write.
+                      Copy the ID from the <a href="/agents" target="_blank" rel="noreferrer">Agents page (opens in a new tab)</a> so your workspace session stays connected. Assignment requires policies:write.
                     </p>
                     {assignmentError ? (
                       <p className="form-error" role="alert">

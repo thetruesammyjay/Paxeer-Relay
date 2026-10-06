@@ -23,8 +23,8 @@ function slugFromName(value: string) {
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs agents:write access to register agents.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs agents:write permission to register agents.";
     if (error.status === 409) return "That agent ID is already in use in this project and environment.";
     if (error.status === 422) return "Check the agent name, ID, and wallet address, then try again.";
     return `Agent registration failed (HTTP ${error.status}). Try again shortly.`;
@@ -118,7 +118,7 @@ export function AgentCreateForm({ apiKey, onCreated }: AgentCreateFormProps) {
             <div>
               <h2 className="card-title">Register an agent</h2>
               <p className="card-description">
-                Add an agent to this project and environment with a key that has agents:write access. You can connect a spending policy after registration.
+                Add an agent to this project with agents:write permission. You can connect a spending policy after registration.
               </p>
             </div>
           </header>

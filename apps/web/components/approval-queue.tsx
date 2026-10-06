@@ -73,9 +73,9 @@ function stateTone(value: string) {
 
 function keyErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
     if (error.status === 403) {
-      return "This key needs both approvals:read and approvals:write access for this project and environment.";
+      return "Your current project access needs approvals:read and approvals:write permissions.";
     }
     if (error.status === 404) {
       return "The approvals endpoint was not found. Update the API and try again.";
@@ -87,8 +87,8 @@ function keyErrorMessage(error: unknown) {
 
 function decisionErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs approvals:write access to record decisions.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs approvals:write permission to record decisions.";
     if (error.status === 409) {
       return "This request already has a decision or is no longer actionable. Refresh the queue.";
     }
@@ -252,7 +252,7 @@ export function ApprovalQueue() {
           <div>
             <h2>The approval queue will appear here</h2>
             <p>
-              Connect a key with read and decision access to review requests.
+              Connect to a workspace with read and decision access to review requests.
               No sample approvals are shown.
             </p>
           </div>
@@ -264,7 +264,7 @@ export function ApprovalQueue() {
           </div>
           <div>
             <h2>Loading approval queue</h2>
-            <p>The API key and project access are being checked.</p>
+            <p>Your project access is being checked.</p>
           </div>
         </section>
       ) : query.isError ? (

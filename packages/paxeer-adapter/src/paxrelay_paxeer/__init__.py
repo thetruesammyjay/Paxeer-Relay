@@ -15,6 +15,12 @@ from paxrelay_paxeer.lxp402 import (
     hash_request_body,
     verify_requirement_fields,
 )
+from paxrelay_paxeer.x402_http import (
+    ExactPaymentOffer,
+    X402ContractError,
+    decode_payment_required,
+    validate_payment_required,
+)
 
 __all__ = [
     "PaymentAdapter",
@@ -28,4 +34,8 @@ __all__ = [
     "generate_nonce",
     "hash_request_body",
     "verify_requirement_fields",
+    "ExactPaymentOffer",
+    "X402ContractError",
+    "decode_payment_required",
+    "validate_payment_required",
 ]

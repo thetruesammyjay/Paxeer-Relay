@@ -9,6 +9,7 @@ configuration and adapters are not a production-ready payment service.
 - Python 3.12 or newer within the range supported by the locked dependencies.
 - `uv` for Python workspace environments.
 - Node.js 22 or newer and pnpm 10 or newer for the web workspace.
+- Next.js 15.5 or newer for the Node.js middleware runtime used by dashboard sign-in.
 - Docker Compose for local PostgreSQL and Redis.
 
 ## First-time setup

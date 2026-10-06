@@ -33,8 +33,8 @@ function MarketingHeader() {
             Sign in
           </Link>
           <Link className="landing-button landing-button-dark" href="/dashboard">
-            <span className="landing-cta-desktop">Explore the demo</span>
-            <span className="landing-cta-mobile">Demo</span>
+            <span className="landing-cta-desktop">Open workspace</span>
+            <span className="landing-cta-mobile">Workspace</span>
             <span aria-hidden="true">↗</span>
           </Link>
         </div>
@@ -51,7 +51,7 @@ function MarketingFooter() {
         <strong>PaxRelay</strong>
       </Link>
       <p>An independent developer project for agent-to-service payments on Paxeer Network.</p>
-      <Link href="/sign-in">Sign-in preview</Link>
+      <Link href="/sign-in">Sign in</Link>
     </footer>
   );
 }

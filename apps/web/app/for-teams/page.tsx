@@ -45,7 +45,7 @@ export default function ForTeamsPage() {
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-button landing-button-ember" href="/dashboard">
-                Preview the operator workspace <span aria-hidden="true">↗</span>
+                Open the operator workspace <span aria-hidden="true">↗</span>
               </Link>
               <Link className="landing-text-link" href="/how-it-works">
                 See the request flow <span aria-hidden="true">→</span>
@@ -78,16 +78,16 @@ export default function ForTeamsPage() {
 
         <Reveal as="section" className="marketing-callout">
           <div>
-            <p className="landing-eyebrow">PRE-ALPHA DASHBOARD</p>
+            <p className="landing-eyebrow">LIVE WORKSPACE DATA</p>
             <h2>See the operator view.</h2>
             <p>
-              The overview still uses sample policies and activity. The Agents
-              page can show your registered agents with a read-only workspace
-              key; dashboard actions are not connected yet.
+              Sign in with your team account to load real records from the
+              selected project. Your role controls which data and actions are
+              available; dashboard pages do not show sample records.
             </p>
           </div>
           <Link className="landing-button landing-button-ember" href="/dashboard">
-            Open dashboard preview <span aria-hidden="true">↗</span>
+            Open the operator workspace <span aria-hidden="true">↗</span>
           </Link>
         </Reveal>
       </main>

@@ -23,8 +23,8 @@ function slugFromName(value: string) {
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs providers:write access to register providers.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs providers:write permission to register providers.";
     if (error.code === "invalid_request") {
       return "A payment wallet address is required in production. Add one and try again.";
     }

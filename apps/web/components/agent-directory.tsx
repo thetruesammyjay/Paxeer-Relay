@@ -30,9 +30,9 @@ function displayWallet(value: string | null) {
 
 function keyErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
     if (error.status === 403) {
-      return "This key needs agents:read access for this project and environment.";
+      return "Your current project access needs agents:read permission.";
     }
     if (error.status === 404) {
       return "The agents endpoint was not found. Update the API and try again.";
@@ -182,8 +182,8 @@ export function AgentDirectory() {
           <div>
             <h2>Your agents will appear here</h2>
             <p>
-              Connect a key to see agents registered to its project and
-              environment. No sample agents are shown.
+              Connect to a workspace to see agents registered to the selected
+              project and environment. No sample agents are shown.
             </p>
           </div>
         </section>
@@ -194,7 +194,7 @@ export function AgentDirectory() {
           </div>
           <div>
             <h2>Loading agent directory</h2>
-            <p>The API key and project access are being checked.</p>
+            <p>Your project access is being checked.</p>
           </div>
         </section>
       ) : query.isError ? (

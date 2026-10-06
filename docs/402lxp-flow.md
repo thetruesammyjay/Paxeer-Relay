@@ -1,5 +1,12 @@
 # 402LXP paid-call flow
 
+> **Implementation status:** This page describes PaxRelay's current internal
+> quote-and-proof flow. Its JSON `payment_requirement` is not the published
+> LayerX 402LXP HTTP v2 `PAYMENT-REQUIRED` envelope. The live adapter now fails
+> closed until official SDK receipt verification is integrated. See the
+> [protocol integration status](protocol-integration.md) and the
+> [repeatable local demo](DEMO-RUNBOOK.md).
+
 The gateway separates request authorization from payment proof submission. An
 agent first asks to invoke a capability. PaxRelay selects an eligible service,
 checks policy, and returns an HTTP 402 payment requirement. The agent then

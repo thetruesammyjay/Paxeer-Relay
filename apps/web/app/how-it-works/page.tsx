@@ -56,7 +56,7 @@ export default function HowItWorksPage() {
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-button landing-button-ember" href="/dashboard">
-                Explore the product preview <span aria-hidden="true">↗</span>
+                Open your workspace <span aria-hidden="true">↗</span>
               </Link>
               <Link className="landing-text-link" href="/for-teams">
                 For agent teams <span aria-hidden="true">→</span>
@@ -105,14 +105,15 @@ export default function HowItWorksPage() {
         <Reveal as="section" className="marketing-callout">
           <div>
             <p className="landing-eyebrow">CURRENT STATUS</p>
-            <h2>This is an early product preview.</h2>
+            <h2>Dashboards use live project data.</h2>
             <p>
-              The dashboards use example information. Production integrations
-              and end-to-end payment workflows are still being built.
+              Sign in to view records from your selected project. Production
+              payment release still depends on validating the external network
+              contracts in staging.
             </p>
           </div>
           <Link className="landing-button landing-button-ember" href="/sign-in">
-            Open sign-in preview <span aria-hidden="true">↗</span>
+            Sign in to your workspace <span aria-hidden="true">↗</span>
           </Link>
         </Reveal>
       </main>

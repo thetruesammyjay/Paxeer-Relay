@@ -36,7 +36,9 @@ apps/web/
 │   ├── agents/page.tsx                # Live tenant agent directory
 │   ├── analytics/page.tsx             # Spend and capability analytics
 │   ├── api/
-│   │   └── health/route.ts            # Next.js process health response
+│   │   ├── auth/[...nextauth]/route.ts # OIDC sign-in and sign-out handlers
+│   │   ├── health/route.ts            # Next.js process health response
+│   │   └── paxrelay/[...path]/route.ts # Same-origin signed API proxy
 │   ├── approvals/page.tsx             # Live approval queue and decisions
 │   ├── creator/
 │   │   └── page.tsx                   # Live project-scoped provider operations dashboard
@@ -89,7 +91,8 @@ apps/web/
 │   └── use-transactions.ts             # Session-scoped transaction API query
 ├── lib/
 │   ├── api-client.ts                  # Typed browser HTTP boundary
-│   ├── providers.tsx                  # React Query provider setup
+│   ├── api-session.tsx # OIDC project selection and workspace context
+│   ├── providers.tsx                  # Auth.js and React Query providers
 │   └── utils.ts                       # Shared client helpers
 ├── public/
 │   ├── PaxRelay-ico.png               # Compact mark and favicon source
@@ -99,6 +102,9 @@ apps/web/
 ├── DESIGN.md                          # Caldera style and dashboard interaction guidance
 ├── FILE-STRUCTURE.md                  # This application map
 ├── next.config.ts                     # Next.js settings
+├── auth.ts # OIDC provider, encrypted session, and route guard
+├── middleware.ts # Node.js dashboard route protection
+├── types/next-auth.d.ts # Typed OIDC session claims
 ├── package.json                       # Web scripts and direct dependencies
 ├── postcss.config.js                  # PostCSS setup
 ├── tailwind.config.ts                 # Tailwind setup
@@ -112,26 +118,28 @@ shell and imports the global stylesheet.
 
 `app/admin/settlements/page.tsx` composes `components/settlement-review.tsx`.
 The page uses `hooks/use-settlement-reconciliation.ts` for typed requests and
-cursor state; the hook calls the FastAPI route through `lib/api-client.ts`.
+cursor state; it uses the selected signed-in project session in protected
+deployments and accepts a development API key only in local development.
 `app/analytics/page.tsx` composes `components/analytics-dashboard.tsx`, which
 uses `hooks/use-analytics.ts` to read the current project's spend and
 capability totals from FastAPI.
 `app/transactions/page.tsx` composes `components/transaction-activity.tsx` and
 uses `hooks/use-transactions.ts` to show recent request, payment, and execution
-states. Both read-only pages use `components/scoped-api-key-access.tsx` to keep
-scoped keys in page memory.
+states. Production requests pass through the same-origin proxy and use the
+current user's project role. Local development can use an API key held only in
+memory.
 `app/agents/page.tsx` composes `components/agent-directory.tsx`, which uses
 `hooks/use-agents.ts` to list agents with `agents:read` and register an agent
-with `agents:write`. A key with both scopes can complete both actions in one
-session. The create form derives an editable lowercase slug from the name,
+with `agents:write`. The active project role or development key must grant the
+matching scopes. The create form derives an editable lowercase slug from the name,
 validates an optional EVM wallet address, and keeps the description optional.
 Registration links an address as metadata; it does not connect a wallet or
 authorize payment. A successful create is added to the live list, and the new
-full agent ID can be copied for policy assignment. The key remains in page
-memory, results use a unique connection cache key, and disconnecting or
-leaving the page clears those cached results.
+full agent ID can be copied for policy assignment. Results use a unique
+connection cache key, and changing project or signing out clears cached data.
 `app/policies/page.tsx` composes `components/policy-directory.tsx`, which uses
-`hooks/use-policies.ts` to read policy summaries with a `policies:read` key.
+`hooks/use-policies.ts` to read policy summaries with the `policies:read`
+permission.
 `components/policy-create-form.tsx` creates policies with `policies:write`,
 exact USDX limits, a mode, optional capability/provider lists, and provider
 reputation, success-rate, and average-latency thresholds.

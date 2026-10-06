@@ -232,14 +232,14 @@ function ProviderRows({ providers }: { providers: NonNullable<LiveDashboardData[
 function resourceProblem<T>(resource: DashboardResource<T>, scope: string): string | null {
   const problem = resource.problem;
   if (!problem) return null;
-  if (problem.status === 403) return `This key cannot read this section. It needs ${scope}.`;
+  if (problem.status === 403) return `Your project role or development key cannot read this section. It needs ${scope}.`;
   if (problem.status === 401) {
-    return "The API key expired or was revoked. Connect another production key.";
+    return "Your workspace session expired or was revoked. Sign in again or reconnect the development key.";
   }
   if (problem.status === 429) {
     return "The API is rate limiting this project. Wait briefly, then refresh.";
   }
-  if (problem.status === 0 || problem.status === null) return "The production API could not be reached.";
+  if (problem.status === 0 || problem.status === null) return "The PaxRelay API could not be reached.";
   return `This section could not load (HTTP ${problem.status}).`;
 }
 
@@ -491,7 +491,7 @@ export function LiveDashboard({ mode }: { mode: LiveDashboardMode }) {
                 <h2 className="card-title">Production project scope</h2>
                 <p>
                   Every figure on this page comes from the connected project and
-                  its API key grants. Cross-organisation platform totals and
+                  its assigned permissions. Cross-organisation platform totals and
                   creator onboarding reviews are not exposed by the current API.
                 </p>
               </section>
@@ -503,8 +503,8 @@ export function LiveDashboard({ mode }: { mode: LiveDashboardMode }) {
                 <p>
                   The current API grants access by production project, not by
                   individual creator account. This view includes records the
-                  connected key can read in that project; use a narrowly scoped
-                  key for each provider workspace.
+                  your current role can read in that project; use a read-only
+                  role for each provider workspace.
                 </p>
               </section>
             ) : null}

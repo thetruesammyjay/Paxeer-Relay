@@ -10,8 +10,8 @@ type TargetStatus = "active" | "inactive";
 
 function statusErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Reconnect and try again.";
-    if (error.status === 403) return "This key needs services:write access to change routing.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs services:write permission to change routing.";
     if (error.status === 404) return "This service is no longer available in this project.";
     if (error.status === 409) return "A deprecated service cannot be paused or resumed.";
     return `The service status could not be changed (HTTP ${error.status}). Try again shortly.`;

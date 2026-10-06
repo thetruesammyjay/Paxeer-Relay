@@ -1,4 +1,8 @@
-"""Official Paxeer Network adapter — production implementation."""
+"""Paxeer adapter surfaces and legacy quote support.
+
+The live payment verifier is intentionally disabled until PaxRelay integrates
+the official LayerX SDK and its receipt verification contract.
+"""
 
 from __future__ import annotations
 
@@ -6,15 +10,17 @@ from typing import Any
 
 import httpx
 
+from paxrelay_paxeer.errors import AdapterConfigurationError
 from paxrelay_paxeer.layerx import LayerXClient
-from paxrelay_paxeer.lxp402 import verify_requirement_fields
 from paxrelay_paxeer.settlement import SettlementClient
 
 class OfficialPaxeerAdapter:
-    """Production adapter connecting PaxRelay to the live Paxeer Network.
+    """Partial live adapter; payment verification is not contract-qualified.
 
     Reads all network config from constructor arguments (injected from
-    pydantic-settings at startup). No environment variable reads here.
+    pydantic-settings at startup). The quote shape retained here is PaxRelay's
+    legacy internal challenge format. It is not the published 402LXP HTTP v2
+    PAYMENT-REQUIRED envelope.
     """
 
     def __init__(
@@ -121,68 +127,16 @@ class OfficialPaxeerAdapter:
     async def verify_payment(
         self, proof: str, quote: dict[str, Any]
     ) -> dict[str, Any]:
-        """Verify a 402LXP payment proof against LayerX."""
-        # Parse proof claims (proof is a signed JWT or JSON string)
-        try:
-            import json
-            proof_claims: dict[str, Any] = json.loads(proof)
-        except Exception:
-            return {"verified": False, "reason": "invalid_proof_format"}
+        """Fail closed until the official receipt verifier is integrated.
 
-        from datetime import datetime
-        expires_at = datetime.fromisoformat(
-            quote["expires_at"].rstrip("Z")
+        The previous prototype accepted fields returned by an undocumented
+        REST path. Those fields are not cryptographic payment evidence under
+        the published 402LXP v2 contract.
+        """
+        del proof, quote
+        raise AdapterConfigurationError(
+            "layerx_402lxp_v2_verifier_not_integrated"
         )
-        quote_chain_id = quote.get("chain_id")
-        if (
-            isinstance(quote_chain_id, bool)
-            or not isinstance(quote_chain_id, int)
-            or quote_chain_id != self._chain_id
-        ):
-            return {"verified": False, "reason": "wrong_chain"}
-
-        ok, reason = verify_requirement_fields(
-            proof_claims=proof_claims,
-            expected_quote_id=quote["quote_id"],
-            expected_request_hash=quote["request_hash"],
-            expected_amount_atomic=int(quote["amount_atomic"]),
-            expected_recipient=quote["recipient_address"],
-            expected_nonce=quote["nonce"],
-            expires_at=expires_at,
-            expected_chain_id=quote_chain_id,
-        )
-        if not ok:
-            return {"verified": False, "reason": reason}
-
-        tx_hash = proof_claims.get("layerx_transaction_hash")
-        if not isinstance(tx_hash, str) or not tx_hash:
-            return {"verified": False, "reason": "missing_transaction_hash"}
-
-        batch_id = proof_claims.get("layerx_batch_id")
-        if batch_id is not None and (
-            not isinstance(batch_id, str)
-            or not batch_id
-            or len(batch_id) > 66
-            or batch_id.strip() != batch_id
-            or not batch_id.isprintable()
-        ):
-            return {"verified": False, "reason": "invalid_batch_id"}
-
-        ok2, reason2 = await self._layerx.verify_transaction_matches_quote(
-            tx_hash=tx_hash,
-            expected_amount_atomic=int(quote["amount_atomic"]),
-            expected_recipient=quote["recipient_address"],
-            expected_quote_id=quote["quote_id"],
-        )
-        if not ok2:
-            return {"verified": False, "reason": reason2}
-
-        return {
-            "verified": True,
-            "layerx_transaction_hash": tx_hash,
-            "layerx_batch_id": proof_claims.get("layerx_batch_id"),
-            "verified_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-        }
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any]:
         """Return unknown until a verified payment-ID status route is configured.

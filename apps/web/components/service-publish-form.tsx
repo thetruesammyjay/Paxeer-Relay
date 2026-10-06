@@ -52,8 +52,8 @@ function isSafeHealthPath(value: string) {
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "The API key was not accepted. Check it and try again.";
-    if (error.status === 403) return "This key needs services:write access to publish services.";
+    if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
+    if (error.status === 403) return "Your current project access needs services:write permission to publish services.";
     if (error.status === 404) {
       return "That provider was not found in this project and environment. Copy its ID from Providers and try again.";
     }

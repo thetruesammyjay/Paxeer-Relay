@@ -23,21 +23,21 @@ const workspaces = [
     title: "For agent operators",
     body: "Set spending rules and follow requests, payments, and service results in one place.",
     href: "/dashboard",
-    action: "Preview the operator workspace",
+    action: "Open the operator workspace",
   },
   {
     number: "02",
     title: "For service providers",
     body: "See how a provider can manage paid services and review incoming requests.",
     href: "/creator",
-    action: "Preview the provider workspace",
+    action: "Open the provider workspace",
   },
   {
     number: "03",
     title: "For PaxRelay operations",
     body: "Explore the internal view for creator reviews, workspaces, and platform activity.",
     href: "/admin",
-    action: "Preview the admin workspace",
+    action: "Open the operations workspace",
   },
 ];
 
@@ -63,7 +63,7 @@ export default function LandingPage() {
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-button landing-button-ember" href="/dashboard">
-                Explore the product preview <span aria-hidden="true">↗</span>
+                Open your workspace <span aria-hidden="true">↗</span>
               </Link>
               <a className="landing-text-link" href="#how-it-works">
                 See how a request works <span aria-hidden="true">↓</span>
@@ -71,7 +71,7 @@ export default function LandingPage() {
             </div>
             <p className="landing-preview-caption">
               <span className="landing-preview-dot" aria-hidden="true" />
-              Pre-alpha preview · Dashboard information is sample data
+              Live API data · Scoped to your selected project and role
             </p>
           </Reveal>
 
@@ -175,8 +175,8 @@ export default function LandingPage() {
               <h2 id="landing-workspaces-title">Made for the people around each request.</h2>
             </div>
             <p>
-              The current dashboard is a product preview. Choose a view to see
-              how each role fits into the service flow.
+              Sign in to load live project data. Your assigned role determines
+              which records and actions are available in each workspace.
             </p>
           </div>
           <div className="landing-workspace-grid">
@@ -199,7 +199,7 @@ export default function LandingPage() {
             <h2 id="landing-close-title">Let agents get work done.<br /><em>Keep the spending visible.</em></h2>
           </div>
           <Link className="landing-button landing-button-ember" href="/dashboard">
-            Explore the product preview <span aria-hidden="true">↗</span>
+            Open your workspace <span aria-hidden="true">↗</span>
           </Link>
         </Reveal>
         </div>
