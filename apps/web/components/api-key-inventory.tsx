@@ -32,6 +32,7 @@ const AVAILABLE_SCOPES = [
   "webhooks:read",
   "webhooks:write",
   "batch:write",
+  "project-members:read",
   "gateway:invoke",
 ] as const;
 

@@ -23,6 +23,9 @@ class TenantContext:
     environment: str = "development"
     scopes: frozenset[str] = frozenset()
     api_key_id: UUID | None = None
+    user_id: UUID | None = None
+    membership_id: UUID | None = None
+    role: str | None = None
 
 
 def tenant_owns(tenant: TenantContext, resource: object) -> bool:

@@ -14,13 +14,13 @@ from paxrelay_api.tenant import TenantContext
 
 
 def require_scope(scope: str) -> Callable[..., Coroutine[Any, Any, TenantContext]]:
-    """Return a FastAPI dependency that enforces one API-key grant."""
+    """Return a FastAPI dependency that enforces one credential grant."""
     if scope not in ALL_SCOPES:
         raise ValueError(f"Unknown API scope: {scope}")
 
     async def enforce(tenant: TenantContext = Depends(verify_api_key)) -> TenantContext:
         if scope not in tenant.scopes:
-            raise ForbiddenError("This API key does not have the required scope.")
+            raise ForbiddenError("This identity does not have the required permission.")
         return tenant
 
     return enforce

@@ -50,11 +50,11 @@ A successful payment does not guarantee that a service delivered a successful re
 
 ## Current status
 
-PaxRelay is pre-alpha and under active development. The workspace, operations, and provider overview dashboards now read live, tenant-scoped production API data. They show loading, empty, permission, and API error states instead of sample metrics. The dashboard checks the API key's environment with the API and rejects keys that are not for production. Each section also needs its own read permission, so a key can show some sections while leaving others unavailable.
+PaxRelay is pre-alpha and under active development. The workspace, operations, and provider overview dashboards read live, project-scoped API data. They show loading, empty, permission, and API error states instead of sample metrics. In staging and production, team members sign in through the configured OIDC provider. Each person's project role determines which data they can read or change.
 
-The Agents, Policies, Providers, Services, Receipts, Analytics, Transactions, Approvals, Settings, and Settlement Review pages also use API data and permission-scoped keys. The dashboards show records for the connected project. The current API does not provide a cross-customer platform directory or individual creator identity, and the sign-in page is still a preview. API keys entered in the dashboard remain in browser memory and are cleared when disconnected or when the page reloads.
+The Agents, Policies, Providers, Services, Receipts, Analytics, Transactions, Approvals, Settings, and Settlement Review pages also use API data. Project owners and administrators can assign project roles from Settings. Dashboard requests pass through the web server; short-lived server-signed assertions carry verified identity to the API, while the browser keeps only its encrypted sign-in session. The admin and creator overviews remain scoped to the selected project. Individual creator ownership and a cross-customer platform directory are not available yet.
 
-Some product capabilities are still incomplete. The local simulator returns made-up payment results. The gateway, policy enforcement, and external payment-network contracts still need validation before real payments should be enabled. Read the [technical documentation](docs/TECHNICAL.md) for the current implementation and production limitations.
+Some product capabilities are still incomplete. The local simulator returns made-up payment results. The gateway, policy enforcement, and external payment-network contracts still need validation before real payments should be enabled. Dashboard SSO requires an OIDC provider, project member provisioning, and matching web/API secrets. Read the [technical documentation](docs/TECHNICAL.md) and [deployment guide](docs/deployment.md) for configuration and current limitations.
 
 ## Author
 

@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Icon } from "@/components/icons";
+import { hasOidcProvider, signIn } from "../../../auth";
 
 export const metadata: Metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
+
+async function beginSsoSignIn() {
+  "use server";
+  await signIn("workspace-sso", { redirectTo: "/dashboard" });
+}
 
 export default function SignInPage() {
   return (
@@ -42,35 +49,29 @@ export default function SignInPage() {
           <span className="eyebrow">PaxRelay workspace</span>
           <h1>Sign in to PaxRelay</h1>
           <p>
-            Choose how your team will sign in. These identity providers are not
-            connected in this preview.
+            Sign in with your organisation&apos;s identity provider. A project
+            owner must invite your verified work email before you can view data.
           </p>
-          <div className="preview-note" role="note">
+          {!hasOidcProvider ? <div className="preview-note" role="note">
             <span className="preview-note-mark" aria-hidden="true">
               i
             </span>
-            <p>Sign-in is a visual preview. No account will be connected.</p>
-          </div>
-          <button className="auth-option" type="button" disabled>
-            <span className="agent-avatar orange">PX</span>
-            <span>Continue with Paxeer Wallet</span>
-          </button>
-          <button className="auth-option" type="button" disabled>
-            <span className="agent-avatar">0x</span>
-            <span>Connect an EVM wallet</span>
-          </button>
-          <button className="auth-option" type="button" disabled>
-            <span className="agent-avatar blue">SSO</span>
-            <span>Continue with SSO</span>
-          </button>
+            <p>Company sign-in is not configured for this deployment.</p>
+          </div> : null}
+          <form action={beginSsoSignIn}>
+            <button className="auth-option" type="submit" disabled={!hasOidcProvider}>
+              <span className="agent-avatar blue">SSO</span>
+              <span>Continue with company SSO</span>
+            </button>
+          </form>
           <div className="auth-note">
             <Icon
               name="approvals"
               width={16}
               style={{ verticalAlign: "middle", marginRight: 8 }}
             />
-            Connecting a wallet does not give PaxRelay control of its funds.
-            Policies and approvals remain separate.
+            Your project role controls what you can view and change. Sign-in
+            does not connect or grant access to payment wallets.
           </div>
         </div>
       </section>

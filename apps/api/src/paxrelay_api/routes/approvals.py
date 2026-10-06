@@ -157,7 +157,7 @@ async def decide_approval(
         raise ConflictError("This approval request is no longer actionable.")
 
     row.status = body.decision
-    row.decided_by = sid(tenant.api_key_id) if tenant.api_key_id else None
+    row.decided_by = sid(tenant.user_id or tenant.api_key_id) if (tenant.user_id or tenant.api_key_id) else None
     row.decided_at = now
     row.decision_reason = body.reason
     if body.decision == "rejected":

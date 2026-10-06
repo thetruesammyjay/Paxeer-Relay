@@ -23,10 +23,10 @@ docker compose up -d postgres redis
 ```
 
 Edit `.env` and replace development secret placeholders. Keep `.env` out of
-version control. The control-plane API requires `AUTH_SECRET`, even though the
-current API is still primarily authenticated by API keys. Production also
-requires a separate `WEBHOOK_ENCRYPTION_KEY` to protect endpoint signing
-secrets at rest.
+version control. The API requires `AUTH_SECRET`; production also requires a
+separate `WEBHOOK_ENCRYPTION_KEY`. Staging and production dashboard sign-in
+requires an OIDC provider and separate high-entropy web-session and internal
+assertion secrets.
 
 Apply all database migrations. Alembic uses an existing shell `DATABASE_URL`;
 otherwise it reads the current folder's `.env`, then falls back to the
@@ -53,10 +53,15 @@ uv run python -m paxrelay_api.bootstrap `
   --organisation-name "Example Team" `
   --organisation-slug example-team `
   --project-name "Development" `
-  --project-slug development
+  --project-slug development `
+  --owner-email "owner@example.com"
 ```
 
-The command prints the raw key once. Save it in a secret store. Use the
+The command creates the initial owner membership when `--owner-email` is
+provided. This email must match the verified OIDC email used at sign-in.
+`--owner-email` is required for staging and production bootstrap. The command
+also requires `APP_ENV` to match the selected `--environment`. It prints the
+raw machine key once; save it in a secret store. Use the
 `--environment production` option only with production secrets and a production
 database. The bootstrap key can issue narrower keys; revoke it after setup.
 
@@ -83,19 +88,21 @@ pnpm dev
 ```
 
 Next.js listens on `http://localhost:3000`. Its `/api/health` route checks only
-the web process. The `/dashboard`, `/admin`, and `/creator` pages use live API
-data after a production API key passes `GET /v1/context`; keys for local
-development, test, or staging are rejected. Configure the web app to point at
-the production API over HTTPS and add the exact web origin to
-`API_CORS_ORIGINS`. The local API started above reports a development
-environment, so it cannot power these production-only overviews.
+the web process. Development supports a scoped API key in memory for local
+work. Staging and production require OIDC sign-in; the web server proxies API
+requests and sends a short-lived assertion to FastAPI. Configure the identity
+provider callback URL as `https://<web-host>/api/auth/callback/workspace-sso`.
+The user's verified email must be provisioned as a project member before the
+first sign-in. The selected project and its role are checked by the API on each
+request.
 
-For a production web deployment, set `NEXT_PUBLIC_API_BASE_URL` to the
-production control-plane HTTPS URL at build time. The operator currently
-enters a scoped API key in the browser; the key remains in memory and clears on
-disconnect or reload. Use a least-privilege key and complete the operator
-authentication gate below before offering this connection to multiple
-customer users.
+Set `APP_ENV` and `NEXT_PUBLIC_APP_ENV` to the same deployment environment.
+Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and a unique
+`WEB_AUTH_SECRET` on the web service. Set `DASHBOARD_OIDC_ISSUER` to the exact
+same issuer and a different `INTERNAL_DASHBOARD_AUTH_SECRET` on both the web
+and API services. Set `PAXRELAY_API_BASE_URL` on the web service to the API's
+HTTPS origin. The web server does not need a browser-visible API key. Staging
+and production API rate limiting and one-use assertion checks require Redis.
 
 ## Optional local services
 
@@ -141,9 +148,9 @@ include:
 | `API_CORS_ORIGINS` | Control-plane API | JSON array of exact browser origins allowed to call the API; defaults to `["http://localhost:3000"]` for development. Staging and production require one or more HTTPS origins. |
 | `REDIS_URL` | API and gateway | Required in staging/production when rate limiting is enabled. `RAILWAY_REDIS_URL` is also accepted. |
 | `REDIS_KEY_PREFIX` | API and gateway | Redis namespace for rate-limit counters; defaults to `paxrelay`. |
-| `API_RATE_LIMIT_MAX_REQUESTS` | Control-plane API | Maximum requests per API key per fixed window; defaults to 300. |
+| `API_RATE_LIMIT_MAX_REQUESTS` | Control-plane API | Maximum requests per machine key or signed-in user per project and fixed window; defaults to 300. |
 | `API_RATE_LIMIT_WINDOW_SECONDS` | Control-plane API | Fixed-window duration in seconds; defaults to 60. |
-| `API_RATE_LIMIT_ENABLED` | Control-plane API | Optional override for development/staging. Production cannot disable rate limiting. |
+| `API_RATE_LIMIT_ENABLED` | Control-plane API | Optional development override. Staging and production cannot disable rate limiting or one-use dashboard assertions. |
 | `GATEWAY_RATE_LIMIT_MAX_REQUESTS` | Gateway | Maximum requests per key per window; defaults to 120. |
 | `GATEWAY_RATE_LIMIT_WINDOW_SECONDS` | Gateway | Fixed-window duration; defaults to 60 seconds. |
 | `GATEWAY_RATE_LIMIT_ENABLED` | Gateway | Optional override for development/staging. Production cannot disable rate limiting. |
@@ -161,7 +168,15 @@ include:
 | `GATEWAY_REQUEST_TIMEOUT_SECONDS` | Gateway | Upper bound for provider response time; defaults to 30 seconds, capped at 120. |
 | `GATEWAY_CONNECT_TIMEOUT_SECONDS` | Gateway | Provider connection timeout; defaults to 5 seconds, capped at 30. |
 | `POLICY_APPROVAL_TTL_SECONDS` | Gateway | How long a policy approval can be acted on; defaults to 900 seconds, range 60 seconds to 24 hours. |
-| `AUTH_SECRET` | Control-plane settings | Required; production requires a unique random value of at least 40 characters. |
+| `AUTH_SECRET` | Control-plane settings | Required; staging and production require a unique, non-template random value of at least 40 characters. |
+| `OIDC_ISSUER` | Web | OIDC issuer URL; must match `DASHBOARD_OIDC_ISSUER` exactly. Required in staging/production. |
+| `OIDC_CLIENT_ID` | Web | Client ID registered with the identity provider. Required in staging/production. |
+| `OIDC_CLIENT_SECRET` | Web | Secret registered with the identity provider; store in the deployment secret manager. |
+| `WEB_AUTH_SECRET` | Web | Auth.js session encryption secret; at least 40 random characters in staging/production and different from the API and internal assertion secrets. |
+| `INTERNAL_DASHBOARD_AUTH_SECRET` | Web and API | Shared HMAC secret for one-use, 60-second web-to-API assertions; at least 40 random characters and different from both services' session/API secrets. |
+| `DASHBOARD_OIDC_ISSUER` | API | Must exactly match the web's `OIDC_ISSUER`; HTTPS required in staging/production. |
+| `PAXRELAY_API_BASE_URL` | Web server | Private server-side control-plane API origin; HTTPS required in staging/production. |
+| `NEXT_PUBLIC_APP_ENV` | Web browser | Expected tenant environment; set to the same value as `APP_ENV`. |
 | `WEBHOOK_ENCRYPTION_KEY` | API and worker | Production requires a unique random value of at least 40 characters. Keep it stable while encrypted webhook secrets exist; rotate it only with a re-encryption rollout. |
 | `WEBHOOK_MAX_ATTEMPTS` | Worker | Maximum attempts per delivery; defaults to 8. |
 | `WEBHOOK_INITIAL_RETRY_SECONDS` | Worker | Base exponential retry delay; defaults to 30 seconds and caps at one hour. |
@@ -180,7 +195,7 @@ include:
 | `PROVIDER_METRICS_WINDOW_DAYS` | Worker | Rolling history window for provider success and latency metrics; defaults to 7 days. |
 | `PROVIDER_METRICS_TRAILING_ATTEMPTS` | Worker | Maximum recent attempts scanned for a failure streak; defaults to 100. |
 | `READINESS_TIMEOUT_SECONDS` | API and gateway | PostgreSQL and Redis readiness deadline; defaults to 3 seconds. |
-| `APP_ENV` | API, gateway, and worker | Use the same tenant environment for the services; accepted values are `development`, `test`, `staging`, and `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
+| `APP_ENV` | API, gateway, worker, and web server | Use the same tenant environment for the services; accepted values are `development`, `test`, `staging`, and `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
 | `USE_MOCK_ADAPTER` | Gateway and worker | Defaults to true for development. Staging and production startup reject true. |
 | `PAXEER_NETWORK_ENVIRONMENT` | Gateway and worker | Use `testnet` or `staging` for staging deployments and `mainnet` for production. Staging startup rejects `mainnet`. |
 | `LAYERX_API_URL` | Gateway and worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects `GET /transactions/{transaction_hash}` to return the transaction amount, recipient, and quote ID/memo. |
@@ -194,7 +209,7 @@ include:
 | `RECEIPT_SIGNING_PRIVATE_KEY` | Gateway | Production requires a protected PEM key; keep it in a secret manager. |
 | `RECEIPT_SIGNING_KEY_ID` | Gateway | Must identify the production receipt key and cannot be `local-development`. |
 | `RECEIPT_PUBLIC_KEYRING_FILE` | Control-plane API | Optional path to the public version 1 receipt-key manifest served at `GET /v1/receipt-keys`; mount it read-only and replace it atomically for rotation or revocation updates. |
-| `NEXT_PUBLIC_API_BASE_URL` | Web | Control-plane API base URL. Defaults to `http://localhost:8000` for local use; production web builds require HTTPS. Set the production URL when building the deployed web app. |
+| `NEXT_PUBLIC_API_BASE_URL` | Web browser | Direct API URL for local development API-key mode. Protected deployments use the private `PAXRELAY_API_BASE_URL` server setting. |
 
 The API reads the repository `.env` and an optional `apps/api/.env` when it is
 started from `apps/api`. Shell environment variables take precedence.

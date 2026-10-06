@@ -16,7 +16,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from paxrelay_api.config import get_settings
@@ -26,6 +26,8 @@ from paxrelay_db import (
     AuditLogModel,
     Organisation,
     Project,
+    ProjectMembership,
+    User,
     close_database,
     configure_database,
     get_engine,
@@ -51,8 +53,13 @@ async def _provision(
     project_name: str,
     project_slug: str,
     environment: str,
+    owner_email: str | None,
 ) -> str:
     settings = get_settings()
+    if environment != settings.app_env:
+        raise ValueError(
+            f"Bootstrap environment {environment!r} must match APP_ENV {settings.app_env!r}."
+        )
     configure_database(
         settings.database_url,
         pool_size=settings.database_pool_size,
@@ -146,6 +153,65 @@ async def _provision(
                 elif not project.is_active:
                     raise ValueError("The requested project is inactive.")
 
+                if owner_email is not None:
+                    owner = (
+                        await session.execute(
+                            select(User)
+                            .where(func.lower(User.email) == owner_email)
+                            .with_for_update()
+                        )
+                    ).scalar_one_or_none()
+                    if owner is None:
+                        owner = User(
+                            id=sid(uuid4()),
+                            email=owner_email,
+                            email_verified=False,
+                            is_active=True,
+                        )
+                        session.add(owner)
+                        await session.flush()
+                    elif not owner.is_active or owner.deleted_at is not None:
+                        raise ValueError("The requested initial owner account is inactive.")
+
+                    membership = (
+                        await session.execute(
+                            select(ProjectMembership).where(
+                                ProjectMembership.user_id == owner.id,
+                                ProjectMembership.project_id == project.project_id,
+                                ProjectMembership.environment == environment,
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if membership is None:
+                        membership = ProjectMembership(
+                            id=sid(uuid4()),
+                            user_id=owner.id,
+                            organisation_id=organisation.id,
+                            project_id=project.project_id,
+                            environment=environment,
+                            role="owner",
+                            is_active=True,
+                        )
+                        session.add(membership)
+                    else:
+                        membership.organisation_id = organisation.id
+                        membership.role = "owner"
+                        membership.is_active = True
+                    await session.flush()
+                    session.add(
+                        AuditLogModel(
+                            id=sid(uuid4()),
+                            organisation_id=organisation.id,
+                            project_id=project.project_id,
+                            environment=environment,
+                            event_type="project.owner.provisioned",
+                            actor_id="system:bootstrap",
+                            resource_type="project_membership",
+                            resource_id=membership.id if membership is not None else owner.id,
+                            details={"email": owner.email, "role": "owner"},
+                        )
+                    )
+
                 key = ApiKey(
                     id=sid(uuid4()),
                     name="Initial administrator key",
@@ -191,6 +257,10 @@ def main() -> None:
     parser.add_argument("--project-name", required=True)
     parser.add_argument("--project-slug", required=True)
     parser.add_argument(
+        "--owner-email",
+        help="Verified work email for the first project owner; required for staging and production.",
+    )
+    parser.add_argument(
         "--environment",
         choices=("development", "staging", "production"),
         default="development",
@@ -198,6 +268,16 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
+        owner_email = args.owner_email.strip().lower() if args.owner_email else None
+        if args.environment in {"staging", "production"} and not owner_email:
+            raise ValueError("--owner-email is required for staging and production bootstrap.")
+        if owner_email is not None and (
+            len(owner_email) > 320
+            or "@" not in owner_email
+            or owner_email.startswith("@")
+            or owner_email.endswith("@")
+        ):
+            raise ValueError("--owner-email must be a valid email address.")
         if not 1 <= len(args.organisation_name.strip()) <= 128:
             raise ValueError("Organisation names must contain 1 to 128 characters.")
         if not 1 <= len(args.project_name.strip()) <= 128:
@@ -209,6 +289,7 @@ def main() -> None:
                 project_name=args.project_name.strip(),
                 project_slug=_slug(args.project_slug),
                 environment=args.environment,
+                owner_email=owner_email,
             )
         )
     except ValueError as exc:
@@ -221,6 +302,8 @@ def main() -> None:
         )
         raise SystemExit(1) from exc
 
+    if args.owner_email:
+        print(f"Initial project owner provisioned: {args.owner_email.strip().lower()}")
     print("PaxRelay API key (shown once; store it in your secret manager):")
     print(key)
     print("Scopes: all currently defined API scopes")

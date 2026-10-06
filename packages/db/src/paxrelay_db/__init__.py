@@ -8,7 +8,13 @@ from paxrelay_db.session import (
     get_session,
 )
 from paxrelay_db.urls import normalize_async_database_url
-from paxrelay_db.models.users import Membership, Organisation, User
+from paxrelay_db.models.users import (
+    ExternalIdentity,
+    Membership,
+    Organisation,
+    ProjectMembership,
+    User,
+)
 from paxrelay_db.models.projects import ApiKey, Project
 from paxrelay_db.models.agents import AgentModel, WalletModel
 from paxrelay_db.models.budget import BudgetReservationModel
@@ -56,6 +62,8 @@ __all__ = [
     # Users / Orgs
     "Membership",
     "Organisation",
+    "ExternalIdentity",
+    "ProjectMembership",
     "User",
     # Projects
     "ApiKey",

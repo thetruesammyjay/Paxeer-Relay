@@ -8,9 +8,9 @@ This document contains the detailed product specification, system design, and de
 
 The repository is in pre-alpha and in an active refactor.
 
-- The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, public receipt-key distribution, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, PostgreSQL readiness reporting, and audited service pause/resume controls. Service publishing accepts HTTP JSON or MCP Streamable HTTP. MCP versions pin a tool name and Draft 2020-12 input schema; the gateway checks arguments before quoting. Pausing prevents new routes while already-issued, unexpired quotes remain completable. The gateway still needs external network-contract validation. The dashboard accepts only keys verified by the API as production keys and keeps them in browser memory, but does not have end-user SSO or a complete multi-user role boundary.
+- The control-plane API has routes for agents, providers, services, policies, scoped API keys, receipts, public receipt-key distribution, transactions, analytics, and webhooks. It includes one-time tenant/key bootstrap, key inventory and revocation, request IDs, PostgreSQL readiness reporting, and audited service pause/resume controls. Service publishing accepts HTTP JSON or MCP Streamable HTTP. MCP versions pin a tool name and Draft 2020-12 input schema; the gateway checks arguments before quoting. Pausing prevents new routes while already-issued, unexpired quotes remain completable. The gateway still needs external network-contract validation. Staging and production dashboard users sign in through OIDC. The web server sends a short-lived signed assertion to the API; the API checks the user's active project membership and role on every request. Machine API keys remain available for SDK and gateway integrations.
 - The gateway contains the two-stage paid-call flow: create a quote, then verify payment, forward the request, and issue a receipt.
-- The web console includes API-backed tenant pages and live production dashboard overviews. Its agent, policy, provider, service, receipt, analytics, and transaction pages read tenant-scoped data from the API using `agents:read`, `policies:read`, `providers:read`, `services:read`, `receipts:read`, `analytics:read`, and `transactions:read` keys. The Agents page also registers agents with `agents:write`; the complete dashboard flow requires both agent scopes. A successful registration appears in the directory and exposes the full agent UUID for copying. An optional wallet address is stored as metadata and does not connect a wallet or enable payment. The Providers page also registers profiles with `providers:write`, including an optional HTTP(S) website and a payment wallet address; production profiles require that address. Provider UUIDs can be copied from registration or the directory. Provider website links are limited to HTTP(S), and registration does not verify provider ownership. The provider list does not include live health or performance data. The Services page publishes services with `services:write` for a copied provider UUID. It captures a capability, protocols, exact USDX per-call price, base and invocation URLs, and bounded health-check settings; exact amounts are sent as integer atomic units. Use HTTPS in staging and production; at invocation, the gateway checks URLs and the production host allowlist before forwarding. The service list shows the latest worker probe result, timestamp, and failure count; a new service stays out of routing until its first probe passes. The Settings page lists project API keys with `api-keys:read` and creates or revokes keys with `api-keys:write`; a new raw key is shown once in page memory. General workspace preferences such as network defaults are not exposed by the current API. The receipt list displays recent summaries, exact atomic-unit payment amounts, and signature metadata; the page does not verify signatures. Its approval page reads requests with `approvals:read` and submits confirmed decisions with `approvals:write`. Approval allows a request to continue to payment checks but does not submit payment. The policy directory can create supported spending rules and expands policies to full rule and assignment details; assigning a policy uses an agent UUID. The evaluator does not enforce allowed contracts, maximum drawdown, or session expiry. The gateway loads recent completed provider failures when a policy sets a failure threshold. The `/dashboard`, `/admin`, and `/creator` overview pages now load live tenant-scoped production data from services, transactions, approvals, providers, receipts, and analytics endpoints. They verify the environment through `GET /v1/context`, refresh every 30 seconds, and show independent loading, empty, scope, and API-error states rather than sample figures. The admin view is project-scoped, not cross-customer; the creator view is also project-scoped because the API does not yet expose per-creator authorization. The sign-in preview remains unconnected, so the API key is the current access mechanism and not an end-user identity session.
+- The web console includes API-backed tenant pages and live production dashboard overviews. Its agent, policy, provider, service, receipt, analytics, and transaction pages read tenant-scoped data from the API using `agents:read`, `policies:read`, `providers:read`, `services:read`, `receipts:read`, `analytics:read`, and `transactions:read` keys. The Agents page also registers agents with `agents:write`; the complete dashboard flow requires both agent scopes. A successful registration appears in the directory and exposes the full agent UUID for copying. An optional wallet address is stored as metadata and does not connect a wallet or enable payment. The Providers page also registers profiles with `providers:write`, including an optional HTTP(S) website and a payment wallet address; production profiles require that address. Provider UUIDs can be copied from registration or the directory. Provider website links are limited to HTTP(S), and registration does not verify provider ownership. The provider list does not include live health or performance data. The Services page publishes services with `services:write` for a copied provider UUID. It captures a capability, protocols, exact USDX per-call price, base and invocation URLs, and bounded health-check settings; exact amounts are sent as integer atomic units. Use HTTPS in staging and production; at invocation, the gateway checks URLs and the production host allowlist before forwarding. The service list shows the latest worker probe result, timestamp, and failure count; a new service stays out of routing until its first probe passes. The Settings page lists project API keys with `api-keys:read`, creates or revokes keys with `api-keys:write`, and manages project members with `project-members:read` and `project-members:write`; a new raw key is shown once in page memory. General workspace preferences such as network defaults are not exposed by the current API. The receipt list displays recent summaries, exact atomic-unit payment amounts, and signature metadata; the page does not verify signatures. Its approval page reads requests with `approvals:read` and submits confirmed decisions with `approvals:write`. Approval allows a request to continue to payment checks but does not submit payment. The policy directory can create supported spending rules and expands policies to full rule and assignment details; assigning a policy uses an agent UUID. The evaluator does not enforce allowed contracts, maximum drawdown, or session expiry. The gateway loads recent completed provider failures when a policy sets a failure threshold. The `/dashboard`, `/admin`, and `/creator` overview pages now load live tenant-scoped production data from services, transactions, approvals, providers, receipts, and analytics endpoints. They verify the environment through `GET /v1/context`, refresh every 30 seconds, and show independent loading, empty, scope, and API-error states rather than sample figures. The admin view is project-scoped, not cross-customer; the creator view is also project-scoped because the API does not yet expose per-creator authorization. The sign-in page uses Auth.js with an OIDC provider. Project owners and administrators manage project memberships in Settings; role grants are enforced by the API, not only by the web interface.
 - The simulator returns fake payment and settlement results. Its service registry is stored in memory.
 - The worker expires overdue policy approvals, recovers stale paid executions as unknown without replaying providers, fans supported events into the durable webhook queue, sends signed webhooks with DNS pinning and bounded retries, probes configured provider health paths, indexes recent execution metrics, rebuilds recent hourly and daily tenant spend rollups, and compares verified payments with local and external evidence. Local mismatches are reviewable through a scoped API route. LayerX/Paxeer endpoint contracts and commitment semantics still need validation. Analytics API queries use fresh daily rollups for complete days and source payments for partial days or whenever the rollup refresh is stale or unavailable.
 - Python runtime packages required by the API, gateway, worker, and simulator are present in this checkout. The Python SDK supports tenant-scoped agent, provider, service, policy, approval, receipt-history, transaction-history, and spend-analytics operations; local receipt verification; public-key manifest retrieval; and a gateway client for requesting a quote and submitting caller-produced payment proof. The Python MCP package exposes configured paid tools through an agent-facing MCP server with structured outcomes and host-supplied payment proof. The gateway invokes provider services over HTTP JSON or MCP Streamable HTTP; MCP service versions pin the upstream tool name and argument schema. Neither MCP adapter signs or initiates payments. Transaction mutations and wallet signing remain unimplemented. The TypeScript SDK, MCP, UI, and API-client packages are not part of the current workspace.
@@ -1245,7 +1245,7 @@ PaxRelay should use existing Paxeer primitives whenever possible instead of depl
 | Blockchain integration | viem, ethers, Paxeer SDK adapters                    |
 | Smart contracts        | Solidity, Foundry                                    |
 | MCP                    | Official Python and TypeScript MCP SDKs              |
-| Authentication         | Better Auth, Auth.js or custom JWT service           |
+| Authentication         | Auth.js with OIDC for dashboard users; scoped API keys for machine clients |
 | Observability          | OpenTelemetry, Sentry, Prometheus-compatible metrics |
 | Frontend hosting       | Vercel                                               |
 | API hosting            | Railway                                              |
@@ -2248,7 +2248,15 @@ Webhook consumers must reject:
 
 ### Dashboard users
 
-Use secure browser sessions with:
+Current staging and production dashboards use Auth.js with an OIDC provider.
+The web server holds the encrypted HTTP-only session, then sends short-lived,
+single-use signed assertions to the control-plane API. The API links verified
+OIDC subjects to provisioned PaxRelay users and checks active project and
+environment roles for each request. Bootstrap requires an initial owner email
+for protected environments; owners and administrators manage memberships in
+the Settings page. The browser does not hold a production machine API key.
+
+Further identity controls can include:
 
 * Email verification.
 * Optional passkeys.
@@ -2259,11 +2267,10 @@ Use secure browser sessions with:
 
 ### API clients
 
-Use project API keys:
+Use project-scoped API keys for machine integrations:
 
 ```text
-pr_test_...
-pr_live_...
+pk_...
 ```
 
 Store only hashed API keys.
@@ -2286,12 +2293,14 @@ Agents may authenticate through:
 
 ```text
 owner
-administrator
-developer
+admin
 operator
-finance
+analyst
 viewer
 ```
+
+Roles are scoped to one project and environment. The API maps each role to
+resource scopes and enforces those scopes on every request.
 
 ### Sensitive operations
 

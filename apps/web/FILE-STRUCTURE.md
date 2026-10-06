@@ -5,8 +5,9 @@ dashboard workspaces, shared interface code, icon packages, and the browser-to-
 API boundary.
 
 In this document, **Current** means the file or route exists in the checkout.
-**Live** means the page reads or changes API records with a scoped production key. **Preview** means identity or product behavior is still presentation-only. **Planned** means the route or workflow
-does not exist yet.
+**Live** means the page reads or changes records from the selected API project.
+**Preview** means the product behavior is still presentation-only. **Planned**
+means the route or workflow does not exist yet.
 
 ## Dashboard workspaces
 
@@ -15,11 +16,11 @@ navigation from the current URL.
 
 | Workspace | Route | Purpose | Data scope |
 | --- | --- | --- | --- |
-| PaxRelay workspace | `/dashboard` | Production project requests, spend, service health, and approvals | Project and environment verified from the connected production key |
-| Admin dashboard | `/admin` | Project providers, services, requests, approvals, and settlement review | Tenant-scoped to the connected production project; no cross-customer directory exists |
+| PaxRelay workspace | `/dashboard` | Project requests, spend, service health, and approvals | Project and environment verified from the signed-in member's active role |
+| Admin dashboard | `/admin` | Project providers, services, requests, approvals, and settlement review | Tenant-scoped to the selected project; no cross-customer directory exists |
 | Creator dashboard | `/creator` | Project services, requests, spend, and receipts | Project-scoped; individual creator ownership is not yet exposed by the API |
 
-`/dashboard`, `/admin`, and `/creator` load live API data and refresh every 30 seconds. They show loading, empty, permission, partial-data, and API-error states instead of sample metrics. Admin data is scoped to the connected project, not the whole PaxRelay platform. Creator data is also project-scoped because the API does not yet expose per-creator ownership or authorization. Dashboard access uses a production API key held in browser memory; the sign-in route remains a preview, not an end-user session. The PaxRelay workspace keeps its existing resource routes, such as `/agents`, `/policies`, and `/transactions`.
+`/dashboard`, `/admin`, and `/creator` load live API data and refresh every 30 seconds. They show loading, empty, permission, partial-data, and API-error states instead of sample metrics. In staging and production, Auth.js uses OIDC sign-in and the API verifies project role access on every request. Admin data is scoped to the selected project, not the whole PaxRelay platform. Creator data is also project-scoped because the API does not yet expose per-creator ownership or authorization. API-key entry remains a development-only workflow. The PaxRelay workspace keeps its existing resource routes, such as `/agents`, `/policies`, and `/transactions`.
 
 ## Current application tree
 
@@ -28,7 +29,7 @@ apps/web/
 ├── app/
 │   ├── (auth)/
 │   │   ├── layout.tsx                 # Public sign-in route-group layout
-│   │   └── sign-in/page.tsx           # Sign-in preview; buttons are presentation only
+│   │   └── sign-in/page.tsx           # Company OIDC sign-in entry point
 │   ├── admin/
 │   │   ├── page.tsx                   # Live tenant-scoped production operations dashboard
 │   │   └── settlements/page.tsx       # Read-only settlement review route
@@ -48,7 +49,7 @@ apps/web/
 │   ├── providers/page.tsx             # Live tenant provider directory
 │   ├── receipts/page.tsx              # Live tenant receipt summaries
 │   ├── services/page.tsx              # Live tenant service directory
-│   ├── settings/page.tsx              # Live project API-key controls
+│   ├── settings/page.tsx              # Project API-key and member-role controls
 │   ├── transactions/page.tsx          # Request and payment activity
 │   ├── globals.css                    # Tokens, shared components, dashboard and mobile styles
 │   └── layout.tsx                     # Root metadata and AppShell
@@ -210,7 +211,7 @@ through `lib/api-client.ts`; production builds require an HTTPS API base URL.
 | URL | File | Purpose and status |
 | --- | --- | --- |
 | `/` | `app/page.tsx` | Public product landing page with product overview and links to dashboard workspaces. |
-| `/sign-in` | `app/(auth)/sign-in/page.tsx` | Sign-in preview. Authentication buttons do not sign in yet. |
+| `/sign-in` | `app/(auth)/sign-in/page.tsx` | Company OIDC sign-in; users need a pre-provisioned verified email and active project membership. |
 | `/how-it-works` | `app/how-it-works/page.tsx` | Public explanation of the request, policy, payment, provider response, and receipt flow. |
 | `/for-teams` | `app/for-teams/page.tsx` | Public introduction for teams that operate AI agents. |
 | `/for-providers` | `app/for-providers/page.tsx` | Public introduction for online service providers. |
@@ -226,8 +227,10 @@ through `lib/api-client.ts`; production builds require an HTTPS API base URL.
 | `/services` | `app/services/page.tsx` | Reads recent service records with `services:read`; publishes a service for a provider UUID and pauses/resumes a service with `services:write`; supports search, status, and protocol filters. Shows configured probe settings and the latest worker result, timestamp, and failure streak. |
 | `/receipts` | `app/receipts/page.tsx` | Reads up to 100 tenant-scoped receipt summaries with a `receipts:read` key; supports local search and execution-state filtering. Shows signature metadata but does not verify signatures. |
 | `/analytics` | `app/analytics/page.tsx` | Reads the last 30 days of spend and capability totals from the API with an `analytics:read` key. |
-| `/settings` | `app/settings/page.tsx` | Lists up to 100 project API keys with `api-keys:read`; create and revoke require `api-keys:write`. Newly created secrets are shown once in page memory. General workspace preferences are not exposed by the current API. |
+| `/settings` | `app/settings/page.tsx` | Lists, creates, and revokes project API keys and manages project members and roles. New key secrets are shown once in page memory. General preferences are not exposed by the API. |
 | `/api/health` | `app/api/health/route.ts` | Next.js process health. It does not check FastAPI or the database. |
+| `/api/auth/[...nextauth]` | `app/api/auth/[...nextauth]/route.ts` | Auth.js OIDC callback and encrypted session endpoints. |
+| `/api/paxrelay/[...path]` | `app/api/paxrelay/[...path]/route.ts` | Same-origin API proxy; authenticates the session and signs short-lived assertions for FastAPI. |
 
 The admin and creator pages have overview sections for their mobile and desktop
 navigation. Current section destinations use URL fragments, such as
@@ -235,11 +238,12 @@ navigation. Current section destinations use URL fragments, such as
 separate route files. Settlement review is a nested route because it has its
 own API access, loading, empty, error, and populated states.
 
-The public landing page, informational pages, and sign-in preview do not use
+The public landing page, informational pages, and sign-in page do not use
 the dashboard shell. The landing page at `/` explains the product and links to
 the dashboard workspaces. `How it works`, `For teams`, and `For providers` have
-separate public routes. `/sign-in` is a visual preview because identity
-providers are not yet connected. `components/marketing-chrome.tsx` supplies the
+separate public routes. `/sign-in` starts the configured company OIDC flow;
+protected deployments fail startup if OIDC configuration is missing.
+`components/marketing-chrome.tsx` supplies the
 sticky header and footer for public pages. `components/reveal.tsx` uses Motion
 for small scroll-triggered reveals and respects reduced-motion preferences.
 
@@ -303,11 +307,13 @@ rules.
 
 ### `hooks/` and `lib/`: API boundary
 
-`lib/api-client.ts` is the browser's typed HTTP boundary. It accepts a bearer
-token from its caller and unwraps the API error envelope. Hooks such as
+`lib/api-client.ts` is the browser's typed HTTP boundary. In staging and
+production it sends requests to the same-origin web proxy, which forwards a
+short-lived signed assertion and selected project ID to FastAPI. In development
+it can accept a scoped API key held only in page memory. Hooks such as
 `hooks/use-analytics.ts`, `hooks/use-transactions.ts`, and
 `hooks/use-settlement-reconciliation.ts` own request state and API response
-types. Dashboard API keys are verified through `GET /v1/context`, held in browser memory, and cleared on disconnect or key change. The workspace, admin, and creator overviews use `hooks/use-live-dashboard.ts` and load live resources independently. Admin and creator overviews remain project-scoped because the API does not yet provide platform-wide or per-creator identity filtering. The network adapter paths and response contracts still require operator confirmation before the data can be treated as production settlement evidence.
+types. Dashboard sessions load project memberships from `/v1/auth/projects`, and the API rechecks the selected membership role on every request. Query data is cleared when the user or project changes. The workspace, admin, and creator overviews use `hooks/use-live-dashboard.ts` and load live resources independently. Admin and creator overviews remain project-scoped because the API does not yet provide platform-wide or per-creator identity filtering. The network adapter paths and response contracts still require operator confirmation before the data can be treated as production settlement evidence.
 
 ```text
 Route page
@@ -322,13 +328,11 @@ Route page
               apps/api (/v1/...)
 ```
 
-The web application must not connect directly to PostgreSQL. The current
-dashboard connection accepts a scoped production API key in browser memory; it
-is not persisted, but it is still available to the browser runtime. A
-customer-facing multi-user deployment must replace this preview connection
-with server-managed user authentication and authorization. Only explicitly
-public configuration, such as the API base URL, may use a `NEXT_PUBLIC_`
-environment variable.
+The web application must not connect directly to PostgreSQL. Production and
+staging dashboard requests pass through the server-side proxy so the browser
+does not receive a machine API key or internal assertion secret. Only explicitly
+public configuration, such as the expected app environment, may use a
+`NEXT_PUBLIC_` environment variable.
 
 ### `public/`: brand assets
 

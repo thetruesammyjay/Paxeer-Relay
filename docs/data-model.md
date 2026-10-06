@@ -21,10 +21,12 @@ Organisation
 ```
 
 Tenant-owned database rows carry `organisation_id`, `project_id`, and usually
-`environment` (`development`, `staging`, or `production`). Control-plane
-authentication resolves these fields and resource/action scopes from the API
-key. Control-plane lists, single-resource lookups, relationships, receipts,
-and analytics enforce all three tenant values. Tool calls carry these columns
+`environment` (`development`, `staging`, or `production`). Machine-key
+authentication resolves these fields and resource/action scopes from the key.
+Dashboard authentication resolves a verified OIDC identity, then checks its
+active `project_memberships` role for the requested project and environment on
+every request. Control-plane lists, single-resource lookups, relationships,
+receipts, and analytics enforce all three tenant values. Tool calls carry these columns
 so related payments and receipts can be scoped through their tool call.
 
 ## Identity and access records
@@ -32,8 +34,10 @@ so related payments and receipts can be scoped through their tool call.
 | Table | Purpose | Important fields |
 | --- | --- | --- |
 | `users` | Human identity record | Email, verification, display name, password hash, active state, last login |
+| `external_identities` | OIDC subject linked to a PaxRelay user | Issuer, subject, user; issuer and subject are unique together |
 | `organisations` | Tenant/account boundary | Name, unique slug, plan, active state |
 | `memberships` | User-to-organisation role | User, organisation, role, inviter |
+| `project_memberships` | Human access to one project environment | User, organisation, project, environment, owner/admin/operator/analyst/viewer role, active state |
 | `projects` | Tenant subdivision | Organisation/project scope, name, slug, active state |
 | `api_keys` | Machine authentication credential | Prefix, SHA-256 hash, test/live type, control-plane and `gateway:invoke` scopes, expiry, active state, last use |
 | `agents` | Automated caller identity | Tenant scope, name, slug, wallet, status, metadata |
@@ -41,11 +45,12 @@ so related payments and receipts can be scoped through their tool call.
 
 The API-key creation route returns the raw key once; only its prefix and hash
 are persisted. A CLI bootstraps the first organisation, project, and scoped
-key; scoped keys can be inventoried and revoked through the API. Gateway keys
-are project-scoped and may select active agents within that project. Human users,
-organisations, and memberships exist in the
-database model but do not yet have corresponding control-plane routes in this
-checkout.
+key. Staging and production bootstrap also requires the first owner's verified
+work email and creates that project's owner membership. Scoped keys can be
+inventoried and revoked through the API. Gateway keys are project-scoped and
+may select active agents within that project. The dashboard links the first
+verified OIDC login to its pre-provisioned user record. Project-member routes
+add, change, and revoke project access; they do not send invitation email.
 
 ## Service and policy records
 

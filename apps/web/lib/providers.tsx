@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiSessionProvider } from "@/lib/api-session";
+import { SessionProvider } from "next-auth/react";
 
 /**
  * Client-side TanStack Query provider. Wrap dashboard layouts with this so
@@ -23,7 +24,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={client}>
-      <ApiSessionProvider>{children}</ApiSessionProvider>
+      <SessionProvider>
+        <ApiSessionProvider>{children}</ApiSessionProvider>
+      </SessionProvider>
     </QueryClientProvider>
   );
 }

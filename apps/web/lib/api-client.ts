@@ -11,6 +11,13 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000";
 
+export const OIDC_SESSION_TOKEN = "__PAXRELAY_OIDC_SESSION__";
+let dashboardProjectId: string | null = null;
+
+export function setDashboardProjectId(projectId: string | null) {
+  dashboardProjectId = projectId;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -87,25 +94,34 @@ export async function apiFetch<T>(
   path: string,
   { token, headers, integerFieldsAsStrings, ...init }: RequestOptions = {},
 ): Promise<T> {
+  const useDashboardSession = token === OIDC_SESSION_TOKEN;
   let apiBase: URL;
-  try {
-    apiBase = new URL(API_URL, window.location.origin);
-  } catch {
-    throw new ApiError(0, "invalid_api_url", "The configured API URL is invalid.");
+  let requestUrl: string;
+  if (useDashboardSession) {
+    requestUrl = `/api/paxrelay${path}`;
+  } else {
+    try {
+      apiBase = new URL(API_URL, window.location.origin);
+    } catch {
+      throw new ApiError(0, "invalid_api_url", "The configured API URL is invalid.");
+    }
+    if (process.env.NODE_ENV === "production" && apiBase.protocol !== "https:") {
+      throw new ApiError(
+        0,
+        "insecure_api_url",
+        "Production dashboard connections require an HTTPS API URL.",
+      );
+    }
+    requestUrl = `${apiBase.toString().replace(/\/$/, "")}${path}`;
   }
-  if (process.env.NODE_ENV === "production" && apiBase.protocol !== "https:") {
-    throw new ApiError(
-      0,
-      "insecure_api_url",
-      "Production dashboard connections require an HTTPS API URL.",
-    );
-  }
-  const base = apiBase.toString().replace(/\/$/, "");
-  const res = await fetch(`${base}${path}`, {
+  const res = await fetch(requestUrl, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && !useDashboardSession ? { Authorization: `Bearer ${token}` } : {}),
+      ...(useDashboardSession && dashboardProjectId
+        ? { "X-Project-ID": dashboardProjectId }
+        : {}),
       ...headers,
     },
   });

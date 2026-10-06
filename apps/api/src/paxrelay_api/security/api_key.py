@@ -29,10 +29,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paxrelay_db import ApiKey, Organisation, Project, get_session
 
 from paxrelay_api.config import get_settings
-from paxrelay_api.exceptions import UnauthorizedError
+from paxrelay_api.exceptions import ForbiddenError, InvalidRequestError, UnauthorizedError
 from paxrelay_api.security.rate_limit import enforce_api_key_limit
-from paxrelay_api.security.scopes import parse_scopes
+from paxrelay_api.security.dashboard_auth import (
+    resolve_dashboard_identity,
+    verify_dashboard_assertion,
+)
+from paxrelay_api.security.scopes import ROLE_SCOPES, parse_scopes
 from paxrelay_api.tenant import TenantContext
+from paxrelay_db import ProjectMembership
 
 # Re-use the shared get_session dependency; auth happens at the same DB session
 # as the rest of the request so last_used_at is committed atomically.
@@ -60,6 +65,14 @@ async def verify_api_key(
         raise UnauthorizedError("Invalid or expired API key.")
 
     raw_key = credentials.credentials
+
+    if not raw_key.startswith("pk_"):
+        return await _verify_dashboard_session(
+            request=request,
+            response=response,
+            token=raw_key,
+            session=session,
+        )
 
     if len(raw_key) < _KEY_PREFIX_LEN:
         raise UnauthorizedError("Invalid or expired API key.")
@@ -151,6 +164,78 @@ async def verify_api_key(
             .execution_options(synchronize_session=False)
         )
 
+    return tenant
+
+
+async def _verify_dashboard_session(
+    *,
+    request: Request,
+    response: Response,
+    token: str,
+    session: AsyncSession,
+) -> TenantContext:
+    """Resolve an OIDC-authenticated user to exactly one chosen project role."""
+    claims = await verify_dashboard_assertion(request, token)
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    identity = await resolve_dashboard_identity(
+        claims=claims,
+        session=session,
+    )
+    expected_environment = (
+        "development" if settings.app_env in {"development", "test"} else settings.app_env
+    )
+    requested_project = request.headers.get("x-project-id")
+    if requested_project:
+        try:
+            requested_project = str(UUID(requested_project))
+        except ValueError as exc:
+            raise InvalidRequestError("X-Project-ID must be a valid project UUID.") from exc
+    stmt = select(ProjectMembership).where(
+        ProjectMembership.user_id == str(identity.user_id),
+        ProjectMembership.environment == expected_environment,
+        ProjectMembership.is_active.is_(True),
+    )
+    if requested_project:
+        stmt = stmt.where(ProjectMembership.project_id == requested_project)
+    memberships = (await session.execute(stmt.order_by(ProjectMembership.created_at))).scalars().all()
+    if not memberships:
+        raise ForbiddenError("This account has no active membership in the requested project.")
+    if not requested_project and len(memberships) > 1:
+        raise InvalidRequestError("Choose a project and send its ID in the X-Project-ID header.")
+
+    membership = memberships[0]
+    project = await session.get(Project, membership.project_id)
+    organisation = await session.get(Organisation, membership.organisation_id)
+    role_scopes = ROLE_SCOPES.get(membership.role)
+    if (
+        project is None
+        or organisation is None
+        or not project.is_active
+        or not organisation.is_active
+        or project.deleted_at is not None
+        or organisation.deleted_at is not None
+        or project.organisation_id != membership.organisation_id
+        or project.project_id != membership.project_id
+        or project.environment != membership.environment
+        or role_scopes is None
+    ):
+        raise ForbiddenError("This account has no active membership in the requested project.")
+
+    tenant = TenantContext(
+        organisation_id=UUID(str(membership.organisation_id)),
+        project_id=UUID(str(membership.project_id)),
+        environment=membership.environment,
+        scopes=role_scopes,
+        user_id=identity.user_id,
+        membership_id=UUID(str(membership.id)),
+        role=membership.role,
+    )
+    await enforce_api_key_limit(
+        request=request,
+        response=response,
+        tenant=tenant,
+        settings=settings,
+    )
     return tenant
 
 

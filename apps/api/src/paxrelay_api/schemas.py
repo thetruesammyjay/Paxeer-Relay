@@ -111,13 +111,51 @@ class ProviderOut(BaseModel):
 
 
 class WorkspaceContextOut(BaseModel):
-    """Tenant and key context verified from the presented API credential."""
+    """Tenant, user, and permission context from the authenticated credential."""
 
     organisation_id: UUID
     project_id: UUID
     environment: Literal["development", "test", "staging", "production"]
-    api_key_id: UUID
+    api_key_id: UUID | None = None
+    user_id: UUID | None = None
+    role: Literal["owner", "admin", "operator", "analyst", "viewer"] | None = None
     scopes: list[str]
+
+
+class DashboardProjectOut(BaseModel):
+    organisation_id: UUID
+    organisation_name: str
+    project_id: UUID
+    project_name: str
+    environment: Literal["development", "test", "staging", "production"]
+    role: Literal["owner", "admin", "operator", "analyst", "viewer"]
+
+
+class ProjectMemberCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    role: Literal["owner", "admin", "operator", "analyst", "viewer"]
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+
+class ProjectMemberUpdate(BaseModel):
+    role: Literal["owner", "admin", "operator", "analyst", "viewer"]
+
+
+class ProjectMemberOut(BaseModel):
+    id: UUID
+    user_id: UUID
+    email: str
+    display_name: str | None
+    role: Literal["owner", "admin", "operator", "analyst", "viewer"]
+    is_active: bool
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------

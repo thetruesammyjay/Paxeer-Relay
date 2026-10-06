@@ -78,6 +78,8 @@ class ApiSettings(BaseSettings):
     jwt_audience: str = "paxrelay-api"
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 2_592_000
+    internal_dashboard_auth_secret: str | None = Field(default=None, repr=False)
+    dashboard_oidc_issuer: str | None = None
 
     # Used to encrypt per-endpoint secrets so workers can sign deliveries.
     # Non-production can use AUTH_SECRET; production must set a separate,
@@ -132,19 +134,47 @@ class ApiSettings(BaseSettings):
 
     @model_validator(mode="after")
     def require_production_secrets(self) -> "ApiSettings":
+        if bool(self.dashboard_oidc_issuer) != bool(self.internal_dashboard_auth_secret):
+            raise ValueError(
+                "DASHBOARD_OIDC_ISSUER and INTERNAL_DASHBOARD_AUTH_SECRET must be configured together"
+            )
+        if self.dashboard_oidc_issuer:
+            parsed_issuer = urlsplit(self.dashboard_oidc_issuer)
+            if (
+                parsed_issuer.scheme not in {"https", "http"}
+                or not parsed_issuer.hostname
+                or parsed_issuer.query
+                or parsed_issuer.fragment
+                or parsed_issuer.username
+                or parsed_issuer.password
+            ):
+                raise ValueError("DASHBOARD_OIDC_ISSUER must be a valid issuer URL")
+            if self.app_env in {"staging", "production"} and parsed_issuer.scheme != "https":
+                raise ValueError("DASHBOARD_OIDC_ISSUER must use HTTPS in staging and production")
+        if self.app_env in {"staging", "production"} and not self.dashboard_oidc_issuer:
+            raise ValueError(
+                "DASHBOARD_OIDC_ISSUER and INTERNAL_DASHBOARD_AUTH_SECRET are required in staging and production"
+            )
+        if self.app_env in {"staging", "production"} and self.api_rate_limit_enabled is False:
+            raise ValueError("API rate limiting cannot be disabled in staging or production")
+        if self.internal_dashboard_auth_secret:
+            if len(self.internal_dashboard_auth_secret) < 40:
+                raise ValueError("INTERNAL_DASHBOARD_AUTH_SECRET must be at least 40 characters")
+            if self.internal_dashboard_auth_secret == self.auth_secret:
+                raise ValueError("INTERNAL_DASHBOARD_AUTH_SECRET must differ from AUTH_SECRET")
         if self.app_env in {"staging", "production"} and not self.api_cors_origins:
             raise ValueError("Set at least one HTTPS origin in API_CORS_ORIGINS")
         if self.app_env in {"staging", "production"} and any(
             not origin.startswith("https://") for origin in self.api_cors_origins
         ):
             raise ValueError("Staging and production API_CORS_ORIGINS must use HTTPS")
-        if self.app_env == "production":
-            if self.api_rate_limit_enabled is False:
-                raise ValueError("API rate limiting cannot be disabled in production")
+        if self.app_env in {"staging", "production"}:
             secrets_to_check = {
                 "AUTH_SECRET": self.auth_secret,
-                "WEBHOOK_ENCRYPTION_KEY": self.webhook_encryption_key or "",
+                "INTERNAL_DASHBOARD_AUTH_SECRET": self.internal_dashboard_auth_secret or "",
             }
+            if self.app_env == "production":
+                secrets_to_check["WEBHOOK_ENCRYPTION_KEY"] = self.webhook_encryption_key or ""
             for name, secret in secrets_to_check.items():
                 lowered = secret.lower()
                 if len(secret) < 40 or any(
@@ -160,7 +190,7 @@ class ApiSettings(BaseSettings):
                     raise ValueError(
                         f"{name} must be at least 40 characters and not a template value"
                     )
-            if self.webhook_encryption_key == self.auth_secret:
+            if self.app_env == "production" and self.webhook_encryption_key == self.auth_secret:
                 raise ValueError("WEBHOOK_ENCRYPTION_KEY must differ from AUTH_SECRET")
         return self
 

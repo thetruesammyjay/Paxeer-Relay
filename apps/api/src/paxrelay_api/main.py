@@ -27,10 +27,12 @@ from paxrelay_api.routes.agents import router as agents_router
 from paxrelay_api.routes.approvals import router as approvals_router
 from paxrelay_api.routes.audit_logs import router as audit_logs_router
 from paxrelay_api.routes.analytics import router as analytics_router
+from paxrelay_api.routes.auth import router as auth_router
 from paxrelay_api.routes.context import router as context_router
 from paxrelay_api.routes.batch import router as batch_router
 from paxrelay_api.routes.keys import router as keys_router
 from paxrelay_api.routes.policies import router as policies_router
+from paxrelay_api.routes.project_members import router as project_members_router
 from paxrelay_api.routes.providers import router as providers_router
 from paxrelay_api.routes.receipts import router as receipts_router
 from paxrelay_api.routes.receipt_keys import router as receipt_keys_router
@@ -101,6 +103,7 @@ def create_app() -> FastAPI:
             "Idempotency-Key",
             "X-Agent-Id",
             "X-Request-Id",
+            "X-Project-ID",
         ],
         expose_headers=["Retry-After", "X-Request-Id"],
         max_age=600,
@@ -110,10 +113,12 @@ def create_app() -> FastAPI:
 
     app.include_router(agents_router, prefix="/v1")
     app.include_router(context_router, prefix="/v1")
+    app.include_router(auth_router, prefix="/v1")
     app.include_router(approvals_router, prefix="/v1")
     app.include_router(providers_router, prefix="/v1")
     app.include_router(services_router, prefix="/v1")
     app.include_router(policies_router, prefix="/v1")
+    app.include_router(project_members_router, prefix="/v1")
     app.include_router(keys_router, prefix="/v1")
     app.include_router(receipts_router, prefix="/v1")
     app.include_router(receipt_keys_router, prefix="/v1")

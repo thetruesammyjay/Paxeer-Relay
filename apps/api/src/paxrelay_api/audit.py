@@ -25,7 +25,7 @@ async def record_change(
     resource_id: UUID | str,
     details: dict[str, Any] | None = None,
 ) -> None:
-    """Append a successful API-key-authenticated change in the same transaction.
+    """Append a successful authenticated change in the same transaction.
 
     Callers must keep details free of credentials, request bodies, and secrets.
     The address is taken from the ASGI peer rather than an untrusted forwarded
@@ -33,7 +33,13 @@ async def record_change(
     """
     peer = request.client.host if request.client is not None else None
     ip_address = peer if peer is not None and len(peer) <= 45 else None
-    actor_id = f"api_key:{tenant.api_key_id}" if tenant.api_key_id else "api_key:unknown"
+    actor_id = (
+        f"user:{tenant.user_id}"
+        if tenant.user_id
+        else f"api_key:{tenant.api_key_id}"
+        if tenant.api_key_id
+        else "system:unknown"
+    )
     safe_details = dict(details or {})
     request_id = getattr(request.state, "request_id", None)
     if request_id is not None:

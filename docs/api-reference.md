@@ -14,31 +14,34 @@ Local defaults:
 | Paid-call gateway | `http://localhost:8080` | No OpenAPI route is currently enabled; `/health` is liveness and `/ready` checks dependencies |
 | Simulator | `http://localhost:8090` | `/docs` |
 
-Control-plane routes under `/v1` require `Authorization: Bearer <api-key>`,
-except for the public receipt verification key manifest at
-`GET /v1/receipt-keys`. That endpoint contains public keys only and does not
-grant access to tenant receipts or other API resources. Keys are stored as
-SHA-256 hashes and looked up by their `pk_` prefix. The
-authenticated key supplies the organisation, project, and environment used for
-tenant scoping. Each route also requires its specific API-key scope. `/health`
-is a public liveness route; `/ready` checks PostgreSQL and checks Redis when
-API rate limiting is enabled. Every response includes an `X-Request-ID` header
-for support and log correlation.
+Control-plane routes under `/v1` accept either `Authorization: Bearer <api-key>`
+for machine integrations or a short-lived signed assertion from the trusted
+web server for a dashboard user. The browser does not receive that assertion.
+The public receipt verification key manifest at `GET /v1/receipt-keys` is the
+only tenant-independent route; it contains public keys only. API keys are
+stored as SHA-256 hashes and looked up by their `pk_` prefix. A machine key
+supplies its own tenant and scopes. A dashboard assertion resolves a linked
+user and requires an active role membership in the selected project and
+environment on every request. These assertions expire after 60 seconds and
+Redis prevents a signed assertion from being reused. `/health` is public liveness; `/ready` checks
+PostgreSQL and Redis when API rate limiting is enabled. Responses include an
+`X-Request-ID` header for support and log correlation.
 
 `GET /v1/context` returns the verified organisation, project, environment,
-API-key ID, and granted scopes for the presented key. The web console uses it
-to confirm that a key belongs to a production environment before loading
-dashboard data. This endpoint does not grant access to other tenant resources;
-each resource route still enforces its own scope.
+machine-key ID or dashboard user ID, role, and effective scopes. The web
+console uses it to confirm its selected project and deployment environment.
+This endpoint does not grant access to other tenant resources; each resource
+route still enforces its own scope.
 
 Staging and production enable a Redis-backed fixed-window limit of 300 requests
-per API key per 60 seconds by default. Configure the limit with
+per machine key or dashboard user, per project, per 60 seconds by default. Configure the limit with
 `API_RATE_LIMIT_MAX_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`. Development
 rate limiting is off unless `API_RATE_LIMIT_ENABLED=true` is set. A 429 response
 includes `Retry-After` and rate-limit headers. If Redis becomes unavailable
 while limiting is enabled, authenticated API requests fail closed with HTTP 503.
 Use an edge proxy or gateway to rate-limit invalid or unauthenticated requests;
-this API limiter starts after API-key verification.
+this API limiter starts after bearer-key or signed-dashboard-assertion
+verification.
 
 The gateway also limits authenticated API keys in staging and production,
 defaulting to 120 requests per 60 seconds. Configure it with
@@ -102,7 +105,8 @@ Scopes are resource/action pairs serialized as alternating colon-separated
 values. For example, `agents:read:agents:write:api-keys:read` grants read and
 write access to agents and read access to API-key metadata. Supported resources
 are `agents`, `providers`, `services`, `policies`, `approvals`, `api-keys`, `receipts`,
-`transactions`, `settlements`, `analytics`, `audit-logs`, `webhooks`, and `batch`; actions are
+`transactions`, `settlements`, `analytics`, `audit-logs`, `webhooks`, `batch`, and
+`project-members`; actions are
 `read` and `write`. The gateway uses the additional `gateway:invoke` grant. An
 API key can only create another key with a subset of its own grants. An empty
 scope set grants no access.
@@ -121,29 +125,45 @@ scope set grants no access.
 | `settlements` | Review tenant-scoped reconciliation records | — |
 | `analytics` | Read spend and capability summaries | — |
 | `audit-logs` | Read recent tenant audit records | — |
+| `project-members` | List selected-project memberships | Owner/admin add, change, or revoke member access |
 | `webhooks` | List/get endpoints | Create/update/delete endpoints |
 | `batch` | — | Bulk agent/provider creation (also requires that resource's `write` grant) |
+
+Dashboard roles are translated into API grants on the server: `owner` receives
+all scopes; `admin` receives control-plane scopes except `gateway:invoke`;
+`operator` can operate configured resources; `analyst` can read operational
+data and decide approvals; and `viewer` receives read-only resource scopes.
+Project-membership mutations require a signed-in human `owner` or `admin` role;
+machine API keys cannot mutate membership, even if the key was granted
+`project-members:write`.
 
 ## Control-plane routes
 
 All paths in this section are prefixed with `/v1`. Unless specified otherwise,
 successful creates return HTTP 201 and list routes return newest records first.
 
-### Workspace context
+### Workspace and project access
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /context` | Return the verified organisation, project, environment, API-key ID, and grants for the bearer key. Requires a valid API key; resource scopes are enforced separately. |
+| `GET /auth/projects` | List active project memberships for the signed-in OIDC user. Available through the web-server assertion. |
+| `GET /auth/context` | Return the selected project, environment, and assigned role. |
+| `GET /context` | Return the verified organisation, project, environment, API-key ID or user ID, role, and effective grants. |
+| `GET /project-members` | List members in the selected project; requires `project-members:read`. |
+| `POST /project-members` | Add a member by verified work email; requires `project-members:write` and owner-level authority. The API records access; it does not send an email. |
+| `PATCH /project-members/{membership_id}` | Change a member role; requires `project-members:write` and owner-level authority. |
+| `DELETE /project-members/{membership_id}` | Revoke project access; requires `project-members:write` and owner-level authority. The last active owner cannot be removed. |
 
-The dashboard uses this endpoint to reject keys outside the production
-environment before it makes dashboard data requests. Example response:
+Example selected context for an SSO user:
 
 ```json
 {
   "organisation_id": "11111111-1111-4111-8111-111111111111",
   "project_id": "22222222-2222-4222-8222-222222222222",
   "environment": "production",
-  "api_key_id": "33333333-3333-4333-8333-333333333333",
+  "api_key_id": null,
+  "user_id": "33333333-3333-4333-8333-333333333333",
+  "role": "viewer",
   "scopes": ["services:read", "transactions:read"]
 }
 ```
@@ -276,8 +296,8 @@ version that the reviewer approved. After approval, the agent must repeat the
 original gateway `POST /v1/invoke` request with the same idempotency key and
 same payload. The gateway rechecks the active policy and current budget, then
 returns the payment challenge only if the approved snapshot still matches.
-The current API records the approving API-key ID; it does not yet authenticate
-or attribute decisions to an individual dashboard user.
+The audit record attributes dashboard decisions to the human user ID, or
+machine decisions to the API-key ID.
 Approval rows expose the provider and service-version IDs, amount, recipient,
 request hash, policy version, expiry, and policy explanation. They do not expose
 the invocation arguments or submitted payment proof.

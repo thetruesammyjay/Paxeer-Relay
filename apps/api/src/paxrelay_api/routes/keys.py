@@ -73,6 +73,9 @@ async def create_api_key(
         key_hash=_sha256_hex(raw_key),
         key_type=body.key_type,
         scopes=body.scopes,
+        created_by=sid(tenant.user_id or tenant.api_key_id)
+        if tenant.user_id or tenant.api_key_id
+        else None,
         organisation_id=sid(tenant.organisation_id),
         project_id=sid(tenant.project_id),
         environment=tenant.environment,

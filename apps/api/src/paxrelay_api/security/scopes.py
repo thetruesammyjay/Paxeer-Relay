@@ -17,6 +17,7 @@ SCOPE_RESOURCES = frozenset(
         "audit-logs",
         "webhooks",
         "batch",
+        "project-members",
     }
 )
 SCOPE_ACTIONS = frozenset({"read", "write"})
@@ -25,6 +26,34 @@ ALL_SCOPES = frozenset(
     for resource in SCOPE_RESOURCES
     for action in SCOPE_ACTIONS
 ) | frozenset({"gateway:invoke"})
+
+ROLE_SCOPES: dict[str, frozenset[str]] = {
+    "owner": ALL_SCOPES,
+    "admin": ALL_SCOPES - {"gateway:invoke"},
+    "operator": frozenset(
+        {
+            "agents:read", "agents:write", "providers:read", "providers:write",
+            "services:read", "services:write", "policies:read", "policies:write",
+            "approvals:read", "approvals:write", "receipts:read", "transactions:read",
+            "settlements:read", "analytics:read", "audit-logs:read", "webhooks:read",
+            "project-members:read",
+        }
+    ),
+    "analyst": frozenset(
+        {
+            "agents:read", "providers:read", "services:read", "policies:read",
+            "approvals:read", "approvals:write", "receipts:read", "transactions:read",
+            "settlements:read", "analytics:read", "audit-logs:read", "project-members:read",
+        }
+    ),
+    "viewer": frozenset(
+        {
+            "agents:read", "providers:read", "services:read", "policies:read",
+            "approvals:read", "receipts:read", "transactions:read", "settlements:read",
+            "analytics:read", "audit-logs:read",
+        }
+    ),
+}
 
 
 def parse_scopes(value: str | None) -> frozenset[str]:

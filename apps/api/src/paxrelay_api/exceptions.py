@@ -61,6 +61,14 @@ class UnauthorizedError(ApiError):
     http_status = status.HTTP_401_UNAUTHORIZED
 
 
+class AuthenticationUnavailableError(ApiError):
+    code = "authentication_unavailable"
+    http_status = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__("Dashboard authentication is temporarily unavailable. Try again shortly.")
+
+
 class ForbiddenError(ApiError):
     code = "forbidden"
     http_status = status.HTTP_403_FORBIDDEN

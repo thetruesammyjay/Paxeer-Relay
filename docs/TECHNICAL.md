@@ -66,9 +66,10 @@ pnpm dev
 ```
 
 The dashboard overview at `/dashboard`, `/admin`, and `/creator` reads live,
-tenant-scoped production data. Before connecting a key, the browser requests
-`GET /v1/context` and accepts only a key that the API confirms belongs to the
-`production` environment. Keys for development, test, or staging are rejected.
+tenant-scoped data for the configured deployment environment. In staging and
+production, users sign in with OIDC and the API confirms the selected
+project-role membership before returning data. Development and test API keys
+are not accepted by a protected deployment.
 The overview reads services, transactions, pending approvals, providers,
 receipts, and 30-day spend independently. A missing scope or failed endpoint
 affects its own section; the rest of the data can still load. These summaries
@@ -80,21 +81,29 @@ The workspace requires `services:read`, `transactions:read`,
 uses `providers:read`; creator also uses `receipts:read`. `/admin` is scoped to
 the connected project, not the whole PaxRelay platform. `/creator` also reads
 at project scope because the API does not yet expose per-creator identity or
-ownership filters. Do not use these pages as a substitute for a user-session
-and role authorization layer.
+ownership filters. The API applies the signed-in user's role grants to every
+resource route.
 
-The `api-session` provider keeps the bearer key in browser memory, shares it
-across dashboard pages, clears query data on disconnect or key change, and
-does not write the key to browser storage. Production web builds require an
-HTTPS API base URL. The sign-in page remains a preview; connecting a production
-key is currently the dashboard's access mechanism, not a multi-user SSO
-session. Use narrowly scoped project keys and keep this limitation in view for
-any customer-facing deployment.
+The `api-session` provider shares the selected project context across dashboard
+pages and clears query data when the user or project changes. In staging and
+production, Auth.js signs users in through the configured OIDC provider. The
+browser holds an encrypted, HTTP-only session cookie and sends dashboard API
+requests to the same-origin Next.js proxy. The proxy signs a one-use assertion
+for the API; the API resolves the OIDC subject, links only a pre-provisioned
+verified email, and checks the active project role on every request. Dashboard
+pages do not receive machine API keys. API-key entry remains available only in
+development for local work. Set the web and API OIDC issuers to the same value,
+use different high-entropy values for `WEB_AUTH_SECRET` and
+`INTERNAL_DASHBOARD_AUTH_SECRET`, and register
+`/api/auth/callback/workspace-sso` with the identity provider.
 
 The agents, policies, providers, services, receipts, analytics, approvals,
 transactions, and settlement pages also read API endpoints with their matching
 scopes. Settings lists project keys with `api-keys:read` and creates or revokes
-them with `api-keys:write`.
+them with `api-keys:write`. Owners and administrators manage project access
+with the `project-members` routes; the API prevents removal of a project's
+last active owner. Member creation records an email and role but does not send
+an invitation email, so teams must send their SSO sign-in URL separately.
 The agents page reads with `agents:read` and registers agents with
 `agents:write`; a key with both scopes can perform both actions in one session.
 It links an optional wallet address as agent metadata, not as a connected or
