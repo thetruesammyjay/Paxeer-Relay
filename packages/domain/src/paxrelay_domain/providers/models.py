@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from paxrelay_domain.types import (
     CapabilitySlug,
@@ -176,9 +176,25 @@ class ServiceVersion(BaseModel):
     pricing: ServicePricing
     delivery: ServiceDelivery
     endpoint_url: str
+    protocol: ServiceProtocol = ServiceProtocol.HTTP
+    mcp_tool_name: str | None = Field(default=None, min_length=1, max_length=128)
+    mcp_input_schema: dict[str, Any] | None = None
     openapi_schema: dict[str, Any] | None = None
     is_active: bool = True
     published_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @model_validator(mode="after")
+    def validate_protocol_contract(self) -> "ServiceVersion":
+        if self.protocol == ServiceProtocol.GRPC:
+            raise ValueError("gRPC service versions are not supported.")
+        if self.protocol == ServiceProtocol.MCP:
+            if not self.mcp_tool_name or self.mcp_input_schema is None:
+                raise ValueError("MCP service versions require a tool name and input schema.")
+            if self.mcp_input_schema.get("type") != "object":
+                raise ValueError("MCP input schema must have type 'object'.")
+        elif self.mcp_tool_name is not None or self.mcp_input_schema is not None:
+            raise ValueError("MCP metadata is only valid for MCP service versions.")
+        return self
 
 
 class ProviderMetrics(BaseModel):

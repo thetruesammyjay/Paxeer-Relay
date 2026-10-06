@@ -4,37 +4,47 @@ The Python package `packages/mcp-python` implements the agent-facing MCP
 adapter. It exposes configured PaxRelay capabilities as MCP tools, requests
 quotes through the gateway, and returns the result and receipt as structured
 tool output. Payment proof remains with the host application's wallet flow.
-The gateway currently forwards provider calls over HTTP; provider-side MCP
-transport is not implemented. The TypeScript MCP package is also absent.
+The gateway supports provider calls over HTTP JSON and MCP Streamable HTTP.
+The TypeScript MCP package is not implemented.
 
-## Intended integration shape
+## Integration model
 
-PaxRelay needs two integration surfaces:
+PaxRelay has two integration surfaces:
 
-1. **Provider adapter:** expose an existing MCP tool through a PaxRelay service
-   and apply the payment check before the tool executes.
+1. **Provider dispatch:** publish an existing MCP tool as a versioned PaxRelay
+   service. The gateway checks the payment before calling the tool.
 2. **Agent adapter:** let an MCP client discover paid tools, handle the 402LXP
    requirement, submit proof, and return the result and receipt as structured
    tool output.
 
-The control-plane service model already has a `capability`, supported
-`protocols`, immutable service versions, endpoint URL, per-call price, and
-optional schema field. The current API accepts protocol names but does not
-implement an MCP protocol transport.
+The control-plane service model records supported `protocols`, immutable
+service versions, endpoint URL, and per-call price. A service version pins its
+protocol and, for MCP, the tool name and input JSON Schema. Publishing accepts
+one protocol: `http` or `mcp`. gRPC remains unsupported.
 
-## Provider-side requirements
+## Provider-side behavior
 
-A future provider package should:
+The API stores the protocol, MCP tool name, and declared input schema on the
+immutable service version. The gateway validates request arguments before
+creating a quote. After payment verification and execution reservation, it
+opens an MCP Streamable HTTP session, confirms the remote tool and schema still
+match the published version, and calls that tool. It does not retry a tool call
+after dispatch begins. If the result is uncertain, the execution stays
+unknown for reconciliation instead of being replayed.
+
+A provider MCP service must:
 
 - map each MCP tool to a stable capability identifier;
 - publish tool name, description, input schema, version, and price;
 - preserve the original tool arguments and validate them against the published
-  schema;
-- call the tool only after payment proof is verified;
+  schema before creating a payment quote;
+- confirm that the upstream tool name and schema still match the immutable
+  published version;
+- call the tool only after payment proof is verified and the execution
+  reservation has been committed;
 - return the provider's result without silently changing its meaning;
 - report provider errors and execution timing separately from payment state;
-- avoid re-executing the same idempotency key unless the provider operation is
-  known to be safe to retry.
+- avoid re-executing a paid request when the provider outcome is uncertain.
 
 Do not place secrets in tool metadata or expose unrestricted provider host
 access through a generic tool wrapper.
@@ -56,7 +66,7 @@ is factually correct.
 
 ## HTTP gateway boundary
 
-The gateway's current request shape is:
+The paid-call control-plane API uses this HTTP request shape:
 
 ```json
 {
@@ -67,9 +77,10 @@ The gateway's current request shape is:
 }
 ```
 
-It returns a 402 requirement before service execution. This HTTP flow is the
-current integration boundary; it is not an MCP transport implementation. Use
-the API and protocol references for the exact request and proof fields.
+It returns a 402 requirement before service execution. Agents use this HTTP
+flow regardless of whether the selected provider service uses HTTP JSON or MCP
+Streamable HTTP. Use the API and protocol references for the exact request and
+proof fields.
 
 ## Current implementation
 
@@ -92,10 +103,10 @@ PaxRelay wallet keys. The package does not submit transfers itself.
 
 ## Remaining implementation sequence
 
-1. Add versioned MCP provider metadata and dispatch MCP service versions from
-   the gateway after payment verification.
-2. Add adapter integration against a fake MCP server and simulator, including
-   cancellation, timeout, and proof-replay cases.
+1. Add and run fake MCP server coverage for cancellation, timeout, tool-schema
+   drift, response limits, and proof replay.
+2. Validate the provider MCP handshake and tool contract with staging
+   providers before enabling it for real paid traffic.
 3. Add a TypeScript adapter after the Python wire contract is stable.
 4. Publish the Python package only after its API and install instructions are
    stable; it is currently a workspace package.

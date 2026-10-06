@@ -37,13 +37,15 @@ export interface ServiceRecord {
   description: string | null;
 }
 
-export type ServiceProtocolName = "http" | "mcp" | "grpc";
+export type ServiceProtocolName = "http" | "mcp";
 
 export interface ServiceCreateInput {
   name: string;
   slug: string;
   capability: string;
   protocols: ServiceProtocolName[];
+  mcp_tool_name?: string | null;
+  mcp_input_schema?: Record<string, unknown> | null;
   price_per_call: ServicePrice;
   base_url: string;
   endpoint_url: string;

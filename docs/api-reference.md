@@ -160,9 +160,14 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 
 Service create bodies contain `name`, `slug`, `capability`, `protocols`,
 `price_per_call`, `base_url`, `endpoint_url`, `version`, and optional
-`description` and `health` settings. Health settings use a path on the same
-host as `base_url`, a check interval, request timeout, and consecutive failure
-threshold; defaults are `/health`, 30 seconds, 5 seconds, and 3 failures.
+`description` and `health` settings. `protocols` must contain exactly one
+supported value: `["http"]` for HTTP JSON or `["mcp"]` for MCP Streamable
+HTTP. MCP services also require `mcp_tool_name` and `mcp_input_schema`. The
+schema must be a Draft 2020-12 object schema no larger than 32 KiB; references
+must be local to the schema. gRPC publishing returns HTTP 422. Health settings
+use a path on the same host as `base_url`, a check interval, request timeout,
+and consecutive failure threshold; defaults are `/health`, 30 seconds, 5
+seconds, and 3 failures.
 Capabilities use lowercase dot-separated names such as
 `research.web-search`; a trailing `.*` wildcard is accepted by validation.
 The gateway sends requests to `endpoint_url`. In staging and production, this
@@ -484,8 +489,10 @@ JSON string:
 {"proof":"{\"quote_id\":\"...\",\"request_hash\":\"...\",\"amount_atomic\":1000000,\"recipient\":\"0x...\",\"nonce\":\"...\",\"chain_id\":125,\"payment_scheme\":\"402LXP\"}"}
 ```
 
-A verified payment is forwarded to the selected service with the original
-arguments as a JSON POST body. A 2xx provider response returns `result` and a
+A verified payment is forwarded to the selected HTTP service with the original
+arguments as a JSON POST body, or to the selected MCP tool over Streamable HTTP.
+The gateway checks the MCP tool name and schema against the immutable service
+version before calling it. A successful provider result returns `result` and a
 signed `receipt`. Proof failures return HTTP 402; reusing an already consumed
 quote returns HTTP 409; provider failures return HTTP 502. Payment verification
 and service delivery remain separate states.

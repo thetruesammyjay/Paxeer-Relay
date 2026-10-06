@@ -53,7 +53,7 @@ checkout.
 | --- | --- |
 | `providers` | Provider identity, status, optional wallet and website |
 | `services` | Provider service name, capability, supported protocol, price, endpoint base, delivery and health configuration |
-| `service_versions` | Versioned invocation target, endpoint URL, pricing, delivery configuration, and optional schema |
+| `service_versions` | Immutable invocation target with protocol, endpoint URL, pricing, delivery configuration, and optional HTTP or MCP schema/tool metadata |
 | `provider_metrics` | Reputation, success, latency, availability, call count, failure streak, and health status |
 | `analytics_spend_rollups` | Hourly/daily committed spend by organisation, project, environment, agent, capability, currency, and bucket |
 | `analytics_refresh_state` | Last successful rollup refresh and coverage window for each worker environment |

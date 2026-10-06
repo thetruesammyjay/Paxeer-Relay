@@ -33,6 +33,9 @@ from paxrelay_domain import (
     RequestState,
     RouteConstraints,
     RouteRequest,
+    Service,
+    ServiceProtocol,
+    ServiceVersion,
     ToolCall,
 )
 from paxrelay_db.repositories import (
@@ -54,7 +57,12 @@ from paxrelay_gateway.proxy.endpoint_security import (
     UnsafeProviderEndpoint,
     resolve_provider_endpoint,
 )
-from paxrelay_gateway.proxy.forwarder import forward_request
+from paxrelay_gateway.proxy.forwarder import ForwardResult, forward_request
+from paxrelay_gateway.proxy.mcp_forwarder import (
+    McpToolContractError,
+    forward_mcp_tool,
+    validate_mcp_arguments,
+)
 from paxrelay_gateway.receipts.issuer import build_and_sign_receipt
 from paxrelay_gateway.verification import (
     VerificationError,
@@ -144,6 +152,25 @@ class GatewayInvokeService:
 
         request_hash = hash_body(_canonical_args(arguments))
         normal_constraints = constraints or {}
+        try:
+            route_constraints = RouteConstraints(**normal_constraints)
+        except ValueError:
+            return QuoteResult(
+                status_code=422,
+                body=_err("invalid_route_constraints", "Route constraints are invalid."),
+            )
+        supported_protocols = {
+            ServiceProtocol.HTTP.value,
+            ServiceProtocol.MCP.value,
+        }
+        if set(route_constraints.required_protocols) - supported_protocols:
+            return QuoteResult(
+                status_code=422,
+                body=_err(
+                    "unsupported_protocol",
+                    "This gateway supports HTTP and MCP provider services.",
+                ),
+            )
         approval: ApprovalRequestModel | None = None
         call: ToolCall | None = None
         await tool_calls.lock_idempotency_key(agent.id, idempotency_key)
@@ -351,6 +378,7 @@ class GatewayInvokeService:
                 or not best_metrics.health_check_passing
                 or not provider.is_operable()
                 or (self._require_provider_wallet and not provider.wallet_address)
+                or not _supports_service_version(best_svc, _best_ver)
                 or best_svc.status.value != "active"
                 or best_svc.environment != agent.environment
                 or provider.environment != agent.environment
@@ -410,6 +438,11 @@ class GatewayInvokeService:
                 agent.project_id,
                 agent.environment.value,
             )
+            candidates = [
+                candidate
+                for candidate in candidates
+                if _supports_service_version(candidate[0], candidate[1])
+            ]
             if not candidates:
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
                 await tool_calls.save(call)
@@ -420,7 +453,7 @@ class GatewayInvokeService:
                 )
             route_request = RouteRequest(
                 capability=capability,
-                constraints=RouteConstraints(**constraints) if constraints else RouteConstraints(),
+                constraints=route_constraints,
             )
             route = self._router.select(route_request, candidates, tool_call_id=call.id)
             if route is None:
@@ -451,6 +484,38 @@ class GatewayInvokeService:
                 )
             recipient = (provider.wallet_address if provider else None) or _ZERO_ADDRESS
             price = _best_ver.pricing.price_per_call or MonetaryAmount.zero()
+
+        if not _supports_service_version(best_svc, _best_ver):
+            if approval is not None:
+                approval.status = "invalidated"
+            else:
+                call = call.model_copy(update={"request_state": RequestState.FAILED})
+                await tool_calls.save(call)
+            return QuoteResult(
+                status_code=409,
+                body=_err(
+                    "unsupported_protocol",
+                    "The selected service version is unsupported.",
+                ),
+                tool_call_id=call.id,
+            )
+        if _best_ver.protocol == ServiceProtocol.MCP:
+            try:
+                validate_mcp_arguments(_best_ver.mcp_input_schema, arguments)
+            except McpToolContractError:
+                if approval is not None:
+                    approval.status = "invalidated"
+                else:
+                    call = call.model_copy(update={"request_state": RequestState.FAILED})
+                    await tool_calls.save(call)
+                return QuoteResult(
+                    status_code=422,
+                    body=_err(
+                        "invalid_arguments",
+                        "Arguments do not match the published MCP tool schema.",
+                    ),
+                    tool_call_id=call.id,
+                )
 
         # Reject unsafe destinations before issuing a payment challenge. The
         # forwarder resolves and pins the address again after payment so DNS
@@ -727,6 +792,7 @@ class GatewayInvokeService:
             or service.organisation_id != agent.organisation_id
             or service.project_id != agent.project_id
             or service.environment != agent.environment
+            or not _supports_service_version(service, service_version)
             or provider.organisation_id != agent.organisation_id
             or provider.project_id != agent.project_id
             or provider.environment != agent.environment
@@ -746,6 +812,19 @@ class GatewayInvokeService:
                 ),
                 tool_call_id=call.id,
             )
+
+        if service_version.protocol == ServiceProtocol.MCP:
+            try:
+                validate_mcp_arguments(service_version.mcp_input_schema, call.arguments)
+            except McpToolContractError:
+                return InvokeResult(
+                    status_code=409,
+                    body=_err(
+                        "service_version_invalid",
+                        "The quoted MCP service contract is invalid. Start a new request.",
+                    ),
+                    tool_call_id=call.id,
+                )
 
         # 1. Verify the proof (local checklist + adapter, fail-closed).
         try:
@@ -847,19 +926,32 @@ class GatewayInvokeService:
         # network boundary. A crash afterward remains visible for reconciliation.
         await self._session.commit()
 
-        forward = await forward_request(
-            endpoint_url=version.endpoint_url,
-            arguments=call.arguments,
-            timeout_seconds=min(
+        forward_options: dict[str, Any] = {
+            "endpoint_url": version.endpoint_url,
+            "arguments": call.arguments,
+            "timeout_seconds": min(
                 version.delivery.timeout_seconds,
                 self._max_provider_timeout_seconds,
             ),
-            connect_timeout_seconds=self._provider_connect_timeout_seconds,
-            max_response_bytes=self._max_provider_response_bytes,
-            allow_private_endpoints=self._allow_private_provider_endpoints,
-            allowed_provider_hosts=self._allowed_provider_hosts,
-            client=client,
-        )
+            "connect_timeout_seconds": self._provider_connect_timeout_seconds,
+            "max_response_bytes": self._max_provider_response_bytes,
+            "allow_private_endpoints": self._allow_private_provider_endpoints,
+            "allowed_provider_hosts": self._allowed_provider_hosts,
+        }
+        if version.protocol == ServiceProtocol.HTTP:
+            forward = await forward_request(**forward_options, client=client)
+        elif (
+            version.protocol == ServiceProtocol.MCP
+            and version.mcp_tool_name is not None
+            and version.mcp_input_schema is not None
+        ):
+            forward = await forward_mcp_tool(
+                **forward_options,
+                tool_name=version.mcp_tool_name,
+                input_schema=version.mcp_input_schema,
+            )
+        else:
+            forward = _failed_forward_result("unsupported_protocol")
         attempt = attempt.model_copy(
             update={
                 "execution_state": forward.execution_state,
@@ -965,6 +1057,31 @@ def _canonical_args(arguments: dict[str, Any]) -> bytes:
 
 def _err(code: str, message: str) -> dict[str, Any]:
     return {"error": {"code": code, "message": message}}
+
+
+def _supports_service_version(service: Service, version: ServiceVersion) -> bool:
+    """Require one supported service protocol matching its immutable version."""
+    if len(service.protocols) != 1:
+        return False
+    service_protocol = service.protocols[0]
+    return (
+        service_protocol in {ServiceProtocol.HTTP, ServiceProtocol.MCP}
+        and version.protocol == service_protocol
+    )
+
+
+def _failed_forward_result(error_code: str) -> ForwardResult:
+    now = datetime.utcnow()
+    return ForwardResult(
+        execution_state=ExecutionState.PROVIDER_ERROR,
+        http_status_code=None,
+        response_body=None,
+        response_bytes=b"",
+        started_at=now,
+        completed_at=now,
+        latency_ms=0,
+        error_code=error_code,
+    )
 
 
 def _find_candidate(candidates: list, service_version_id: UUID):

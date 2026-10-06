@@ -14,7 +14,7 @@ interface ServicePublishFormProps {
   onPublished: (service: ServiceRecord) => void;
 }
 
-const PROTOCOLS: ServiceProtocolName[] = ["http", "mcp", "grpc"];
+const PROTOCOLS: ServiceProtocolName[] = ["http", "mcp"];
 const CAPABILITY_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*(\.\*)?$/;
 
 function slugFromName(value: string) {
@@ -58,7 +58,9 @@ function errorMessage(error: unknown) {
       return "That provider was not found in this project and environment. Copy its ID from Providers and try again.";
     }
     if (error.status === 409) return "That service ID is already in use for this provider and environment.";
-    if (error.status === 422) return "Check the provider ID, capability, price, URLs, and health settings.";
+    if (error.status === 422) {
+      return "Check the provider ID, capability, price, URLs, health settings, and MCP tool schema.";
+    }
     return `Service publishing failed (HTTP ${error.status}). Try again shortly.`;
   }
   if (error instanceof Error) return error.message;
@@ -76,7 +78,11 @@ export function ServicePublishForm({ apiKey, onPublished }: ServicePublishFormPr
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [capability, setCapability] = useState("");
-  const [protocols, setProtocols] = useState<ServiceProtocolName[]>(["http"]);
+  const [protocol, setProtocol] = useState<ServiceProtocolName>("http");
+  const [mcpToolName, setMcpToolName] = useState("");
+  const [mcpInputSchema, setMcpInputSchema] = useState(
+    '{\n  "type": "object",\n  "properties": {}\n}',
+  );
   const [price, setPrice] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [endpointUrl, setEndpointUrl] = useState("");
@@ -87,14 +93,6 @@ export function ServicePublishForm({ apiKey, onPublished }: ServicePublishFormPr
   const [version, setVersion] = useState("1.0.0");
   const [description, setDescription] = useState("");
 
-  function toggleProtocol(protocol: ServiceProtocolName) {
-    setProtocols((current) =>
-      current.includes(protocol)
-        ? current.filter((item) => item !== protocol)
-        : [...current, protocol],
-    );
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -103,20 +101,40 @@ export function ServicePublishForm({ apiKey, onPublished }: ServicePublishFormPr
     setCopyMessage("");
 
     try {
-      if (protocols.length === 0) {
-        throw new Error("Choose at least one supported protocol.");
-      }
       if (!CAPABILITY_PATTERN.test(capability.trim())) {
         throw new Error("Use a lowercase capability such as research.web-search.");
       }
       if (!isSafeHealthPath(healthEndpoint.trim())) {
         throw new Error("Use a health-check path on the service host, such as /health.");
       }
+      let mcpSchema: Record<string, unknown> | null = null;
+      if (protocol === "mcp") {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(mcpToolName.trim())) {
+          throw new Error("Enter the exact MCP tool name exposed by the provider.");
+        }
+        let parsedSchema: unknown;
+        try {
+          parsedSchema = JSON.parse(mcpInputSchema);
+        } catch {
+          throw new Error("The MCP input schema must be valid JSON.");
+        }
+        if (
+          parsedSchema === null ||
+          typeof parsedSchema !== "object" ||
+          Array.isArray(parsedSchema) ||
+          (parsedSchema as Record<string, unknown>).type !== "object"
+        ) {
+          throw new Error('The MCP input schema must be a JSON object with "type": "object".');
+        }
+        mcpSchema = parsedSchema as Record<string, unknown>;
+      }
       const input: ServiceCreateInput = {
         name: name.trim(),
         slug: slug.trim(),
         capability: capability.trim(),
-        protocols,
+        protocols: [protocol],
+        mcp_tool_name: protocol === "mcp" ? mcpToolName.trim() : null,
+        mcp_input_schema: mcpSchema,
         price_per_call: {
           amount_atomic: toAtomicAmount(price),
           currency: "USDX",
@@ -141,7 +159,9 @@ export function ServicePublishForm({ apiKey, onPublished }: ServicePublishFormPr
       setSlug("");
       setSlugEdited(false);
       setCapability("");
-      setProtocols(["http"]);
+      setProtocol("http");
+      setMcpToolName("");
+      setMcpInputSchema('{\n  "type": "object",\n  "properties": {}\n}');
       setPrice("");
       setBaseUrl("");
       setEndpointUrl("");
@@ -289,22 +309,54 @@ export function ServicePublishForm({ apiKey, onPublished }: ServicePublishFormPr
               />
               <small>Enter up to 6 decimal places. The amount is stored exactly.</small>
             </label>
-            <fieldset className="resource-form-field service-protocol-field">
-              <legend>Supported protocols</legend>
-              <div className="service-protocol-options">
-                {PROTOCOLS.map((protocol) => (
-                  <label className="service-protocol-option" key={protocol}>
-                    <input
-                      type="checkbox"
-                      checked={protocols.includes(protocol)}
-                      onChange={() => toggleProtocol(protocol)}
-                    />
-                    <span>{protocol.toUpperCase()}</span>
-                  </label>
+            <label className="resource-form-field">
+              <span>Invocation protocol</span>
+              <select
+                className="search"
+                value={protocol}
+                onChange={(event) => setProtocol(event.target.value as ServiceProtocolName)}
+              >
+                {PROTOCOLS.map((item) => (
+                  <option key={item} value={item}>
+                    {item === "http" ? "HTTP JSON" : "MCP Streamable HTTP"}
+                  </option>
                 ))}
-              </div>
-              <small>Choose at least one way agents can call this service.</small>
-            </fieldset>
+              </select>
+              <small>A service version uses one invocation protocol.</small>
+            </label>
+            {protocol === "mcp" ? (
+              <>
+                <label className="resource-form-field">
+                  <span>Provider MCP tool name</span>
+                  <input
+                    className="search mono"
+                    required
+                    maxLength={128}
+                    autoComplete="off"
+                    value={mcpToolName}
+                    onChange={(event) => setMcpToolName(event.target.value)}
+                    placeholder="web_search"
+                  />
+                  <small>The tool name must match the provider's MCP tool listing.</small>
+                </label>
+                <label className="resource-form-field resource-form-wide">
+                  <span>MCP input schema (JSON)</span>
+                  <textarea
+                    className="search mono"
+                    required
+                    rows={8}
+                    maxLength={32768}
+                    spellCheck={false}
+                    value={mcpInputSchema}
+                    onChange={(event) => setMcpInputSchema(event.target.value)}
+                  />
+                  <small>
+                    Define the published argument contract. Remote JSON Schema references are
+                    disabled; references must stay inside this schema.
+                  </small>
+                </label>
+              </>
+            ) : null}
             <label className="resource-form-field">
               <span>Service base URL</span>
               <input

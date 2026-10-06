@@ -7,12 +7,15 @@ independently of the internal domain layer.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from jsonschema import Draft202012Validator, SchemaError
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from paxrelay_api.security.scopes import parse_scopes
 
@@ -154,15 +157,97 @@ class ServiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     capability: str = Field(pattern=r"^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*(\.\*)?$")
-    protocols: list[Literal["http", "mcp", "grpc"]] = Field(
-        default_factory=lambda: ["http"], min_length=1, max_length=3
+    protocols: list[Literal["http", "mcp"]] = Field(
+        default_factory=lambda: ["http"], min_length=1, max_length=1
     )
+    mcp_tool_name: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    mcp_input_schema: dict[str, Any] | None = None
     price_per_call: MoneyIn
     base_url: str = Field(min_length=8, max_length=2048, pattern=r"^https?://")
     endpoint_url: str = Field(min_length=8, max_length=2048, pattern=r"^https?://")
     health: ServiceHealthConfig = Field(default_factory=ServiceHealthConfig)
     version: str = Field(default="1.0.0", min_length=1, max_length=32)
     description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_protocol_contract(self) -> "ServiceCreate":
+        if self.protocols == ["mcp"]:
+            if not self.mcp_tool_name or self.mcp_input_schema is None:
+                raise ValueError(
+                    "MCP services require mcp_tool_name and mcp_input_schema."
+                )
+            schema = self.mcp_input_schema
+            if schema.get("type") != "object":
+                raise ValueError("MCP input schema must have type 'object'.")
+            try:
+                encoded_schema = json.dumps(
+                    schema,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            except (TypeError, ValueError) as exc:
+                raise ValueError("MCP input schema must be valid JSON.") from exc
+            if len(encoded_schema) > 32_768:
+                raise ValueError("MCP input schema must not exceed 32 KiB.")
+            for node in _walk_json_schema(schema):
+                for key in ("$ref", "$dynamicRef", "$recursiveRef"):
+                    reference = node.get(key)
+                    if reference is not None and not str(reference).startswith("#"):
+                        raise ValueError(
+                            "MCP input schema may use only local JSON Schema references."
+                        )
+            try:
+                Draft202012Validator.check_schema(schema)
+            except (SchemaError, RecursionError) as exc:
+                raise ValueError(
+                    "MCP input schema is not a valid Draft 2020-12 schema."
+                ) from exc
+        elif self.mcp_tool_name is not None or self.mcp_input_schema is not None:
+            raise ValueError("MCP metadata is only valid when protocols is ['mcp'].")
+        return self
+
+
+def _walk_json_schema(root: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """Visit nested schema objects when checking for remote references."""
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        yield node
+        for key in (
+            "properties",
+            "$defs",
+            "definitions",
+            "patternProperties",
+            "dependentSchemas",
+            "propertyNames",
+        ):
+            children = node.get(key)
+            if isinstance(children, dict):
+                stack.extend(
+                    value for value in children.values() if isinstance(value, dict)
+                )
+        for key in (
+            "items",
+            "contains",
+            "additionalProperties",
+            "unevaluatedProperties",
+            "unevaluatedItems",
+            "contentSchema",
+            "not",
+            "if",
+            "then",
+            "else",
+        ):
+            child = node.get(key)
+            if isinstance(child, dict):
+                stack.append(child)
+        for key in ("allOf", "anyOf", "oneOf", "prefixItems"):
+            children = node.get(key)
+            if isinstance(children, list):
+                stack.extend(value for value in children if isinstance(value, dict))
 
 
 class ServiceStatusUpdate(BaseModel):

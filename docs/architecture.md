@@ -161,6 +161,11 @@ application services (API routes / gateway invoke service)
 ```
 
 Keep FastAPI, SQLAlchemy, and HTTP client details out of
-`packages/domain`. Keep protocol-specific code inside `packages/paxeer-adapter`.
-Use repository interfaces for persistence and keep policy evaluation and
+`packages/domain`. Keep payment protocol-specific code inside
+`packages/paxeer-adapter` and provider invocation transports inside the gateway
+proxy. Use repository interfaces for persistence and keep policy evaluation and
 provider scoring deterministic and side-effect free.
+
+Provider invocation has protocol-specific gateway adapters for HTTP JSON and
+MCP Streamable HTTP. The MCP adapter verifies the upstream tool contract stored
+on the immutable service version before execution.

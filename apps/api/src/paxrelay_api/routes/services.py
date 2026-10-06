@@ -119,6 +119,9 @@ async def publish_service(
         pricing=service.pricing,
         delivery=service.delivery,
         endpoint_url=body.endpoint_url,
+        protocol=ServiceProtocol(body.protocols[0]),
+        mcp_tool_name=body.mcp_tool_name,
+        mcp_input_schema=body.mcp_input_schema,
     )
     await repo.save_service_version(version)
 

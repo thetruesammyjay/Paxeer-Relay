@@ -152,6 +152,9 @@ def _to_service_version(m: ServiceVersionModel) -> ServiceVersion:
             concurrency_limit=delivery.get("concurrency_limit"),
         ),
         endpoint_url=m.endpoint_url,
+        protocol=ServiceProtocol(getattr(m, "protocol", "http")),
+        mcp_tool_name=m.mcp_tool_name,
+        mcp_input_schema=m.mcp_input_schema,
         openapi_schema=m.openapi_schema,
         is_active=m.is_active,
         published_at=m.published_at,
@@ -436,6 +439,9 @@ class SqlAlchemyProviderRepository:
         m.version = version.version
         m.capability = version.capability
         m.endpoint_url = version.endpoint_url
+        m.protocol = version.protocol.value
+        m.mcp_tool_name = version.mcp_tool_name
+        m.mcp_input_schema = version.mcp_input_schema
         m.pricing_json = _pricing_to_json(version.pricing)
         m.delivery_json = _delivery_to_json(version.delivery)
         m.openapi_schema = version.openapi_schema
