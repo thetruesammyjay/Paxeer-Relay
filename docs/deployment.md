@@ -83,8 +83,19 @@ pnpm dev
 ```
 
 Next.js listens on `http://localhost:3000`. Its `/api/health` route checks only
-the web process. Most console pages still show sample data and do not yet call
-the control-plane API.
+the web process. The `/dashboard`, `/admin`, and `/creator` pages use live API
+data after a production API key passes `GET /v1/context`; keys for local
+development, test, or staging are rejected. Configure the web app to point at
+the production API over HTTPS and add the exact web origin to
+`API_CORS_ORIGINS`. The local API started above reports a development
+environment, so it cannot power these production-only overviews.
+
+For a production web deployment, set `NEXT_PUBLIC_API_BASE_URL` to the
+production control-plane HTTPS URL at build time. The operator currently
+enters a scoped API key in the browser; the key remains in memory and clears on
+disconnect or reload. Use a least-privilege key and complete the operator
+authentication gate below before offering this connection to multiple
+customer users.
 
 ## Optional local services
 
@@ -183,7 +194,7 @@ include:
 | `RECEIPT_SIGNING_PRIVATE_KEY` | Gateway | Production requires a protected PEM key; keep it in a secret manager. |
 | `RECEIPT_SIGNING_KEY_ID` | Gateway | Must identify the production receipt key and cannot be `local-development`. |
 | `RECEIPT_PUBLIC_KEYRING_FILE` | Control-plane API | Optional path to the public version 1 receipt-key manifest served at `GET /v1/receipt-keys`; mount it read-only and replace it atomically for rotation or revocation updates. |
-| `NEXT_PUBLIC_API_BASE_URL` | Web | Defaults to `http://localhost:8000` in the client wrapper. |
+| `NEXT_PUBLIC_API_BASE_URL` | Web | Control-plane API base URL. Defaults to `http://localhost:8000` for local use; production web builds require HTTPS. Set the production URL when building the deployed web app. |
 
 The API reads the repository `.env` and an optional `apps/api/.env` when it is
 started from `apps/api`. Shell environment variables take precedence.

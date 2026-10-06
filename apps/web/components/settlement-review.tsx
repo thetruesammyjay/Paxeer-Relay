@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Invoice01Icon, ShieldCheckIcon } from "@hugeicons/core-free-icons";
 import { useSettlementReconciliation } from "@/hooks/use-settlement-reconciliation";
@@ -11,6 +10,7 @@ import type {
   SettlementReconciliation,
 } from "@/hooks/use-settlement-reconciliation";
 import { ApiError } from "@/lib/api-client";
+import { useApiSession } from "@/lib/api-session";
 import { StatusBadge } from "@/components/status-badge";
 
 const FILTERS: { value: ReconciliationStatus; label: string }[] = [
@@ -165,7 +165,7 @@ function ReviewFacts({ record }: { record: SettlementReconciliation }) {
 }
 
 export function SettlementReview() {
-  const queryClient = useQueryClient();
+  const apiSession = useApiSession();
   const [draftToken, setDraftToken] = useState("");
   const [token, setToken] = useState("");
   const [connectionVersion, setConnectionVersion] = useState(0);
@@ -183,17 +183,33 @@ export function SettlementReview() {
   });
 
   useEffect(() => {
+    if (apiSession.apiKey && apiSession.apiKey !== token) {
+      setToken(apiSession.apiKey);
+      setConnectionVersion((version) => version + 1);
+      setKeyFormOpen(false);
+      setCursors([null]);
+      setSelectedId(null);
+    } else if (!apiSession.apiKey && token) {
+      setToken("");
+      setConnectionVersion((version) => version + 1);
+      setKeyFormOpen(true);
+      setCursors([null]);
+      setSelectedId(null);
+    }
+  }, [apiSession.apiKey, token]);
+
+  useEffect(() => {
     if (token && query.isSuccess) {
       setKeyFormOpen(false);
       setDraftToken("");
     }
   }, [token, query.isSuccess]);
 
-  function connect(event: FormEvent<HTMLFormElement>) {
+  async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextToken = draftToken.trim();
     if (!nextToken) return;
-    queryClient.removeQueries({ queryKey: ["settlement-reconciliation"] });
+    if (!(await apiSession.connect(nextToken))) return;
     setToken(nextToken);
     setConnectionVersion((version) => version + 1);
     setCursors([null]);
@@ -201,7 +217,7 @@ export function SettlementReview() {
   }
 
   function disconnect() {
-    queryClient.removeQueries({ queryKey: ["settlement-reconciliation"] });
+    apiSession.disconnect();
     setToken("");
     setDraftToken("");
     setKeyFormOpen(true);
@@ -282,14 +298,15 @@ export function SettlementReview() {
           <div>
             <h2 id="settlement-access-title">Connect a read-only API key</h2>
             <p>
-              Use a key with <code>settlements:read</code> access for the project
-              and environment you want to review.
+              Use a production key with <code>settlements:read</code> access.
+              The API verifies the project and production environment before
+              reconciliation data is loaded.
             </p>
           </div>
         </div>
 
         {keyFormOpen || !token ? (
-          <form className="settlement-key-form" onSubmit={connect}>
+          <form className="settlement-key-form" onSubmit={(event) => void connect(event)}>
             <label className="settlement-key-field">
               <span>API key</span>
               <input
@@ -298,7 +315,7 @@ export function SettlementReview() {
                 spellCheck={false}
                 value={draftToken}
                 onChange={(event) => setDraftToken(event.target.value)}
-                placeholder="Paste a scoped API key"
+                placeholder="Paste a production API key"
                 aria-describedby="settlement-key-note"
                 required
               />
@@ -323,9 +340,12 @@ export function SettlementReview() {
               </button>
             ) : null}
             <p id="settlement-key-note" className="settlement-key-note">
-              This preview keeps the key in this page’s memory only. It is cleared
-              when you disconnect or reload.
+              Only production keys are accepted. The key stays in memory across
+              dashboard pages and is cleared when you disconnect or reload.
             </p>
+            {apiSession.error ? (
+              <p className="api-session-error" role="alert">{apiSession.error}</p>
+            ) : null}
           </form>
         ) : (
           <div className="settlement-connected">

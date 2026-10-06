@@ -87,7 +87,21 @@ export async function apiFetch<T>(
   path: string,
   { token, headers, integerFieldsAsStrings, ...init }: RequestOptions = {},
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  let apiBase: URL;
+  try {
+    apiBase = new URL(API_URL, window.location.origin);
+  } catch {
+    throw new ApiError(0, "invalid_api_url", "The configured API URL is invalid.");
+  }
+  if (process.env.NODE_ENV === "production" && apiBase.protocol !== "https:") {
+    throw new ApiError(
+      0,
+      "insecure_api_url",
+      "Production dashboard connections require an HTTPS API URL.",
+    );
+  }
+  const base = apiBase.toString().replace(/\/$/, "");
+  const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",

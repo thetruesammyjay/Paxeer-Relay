@@ -110,6 +110,16 @@ class ProviderOut(BaseModel):
     website_url: str | None = None
 
 
+class WorkspaceContextOut(BaseModel):
+    """Tenant and key context verified from the presented API credential."""
+
+    organisation_id: UUID
+    project_id: UUID
+    environment: Literal["development", "test", "staging", "production"]
+    api_key_id: UUID
+    scopes: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Services
 # ---------------------------------------------------------------------------

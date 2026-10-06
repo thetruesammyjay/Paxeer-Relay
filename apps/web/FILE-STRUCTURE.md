@@ -5,8 +5,7 @@ dashboard workspaces, shared interface code, icon packages, and the browser-to-
 API boundary.
 
 In this document, **Current** means the file or route exists in the checkout.
-**Preview** means the page is implemented with sample content but is not backed
-by the corresponding live API workflow. **Planned** means the route or workflow
+**Live** means the page reads or changes API records with a scoped production key. **Preview** means identity or product behavior is still presentation-only. **Planned** means the route or workflow
 does not exist yet.
 
 ## Dashboard workspaces
@@ -16,17 +15,11 @@ navigation from the current URL.
 
 | Workspace | Route | Purpose | Data scope |
 | --- | --- | --- | --- |
-| PaxRelay workspace | `/dashboard` | An organisation's agent, policy, provider, transaction, and receipt operations | Intended to be the signed-in organisation and project |
-| Admin dashboard | `/admin` | PaxRelay internal platform overview, creator review, workspace directory, and platform health | Intended for internal admin roles |
-| Creator dashboard | `/creator` | Provider services, incoming requests, payment records, and profile | Intended to be the signed-in provider |
+| PaxRelay workspace | `/dashboard` | Production project requests, spend, service health, and approvals | Project and environment verified from the connected production key |
+| Admin dashboard | `/admin` | Project providers, services, requests, approvals, and settlement review | Tenant-scoped to the connected production project; no cross-customer directory exists |
+| Creator dashboard | `/creator` | Project services, requests, spend, and receipts | Project-scoped; individual creator ownership is not yet exposed by the API |
 
-`/admin` and `/creator` are preview pages and use sample data. Their navigation
-links to sections on the overview page with URL fragments, for example
-`/admin#creators` and `/creator#requests`. `/admin/settlements` is a live,
-read-only review screen backed by the tenant-scoped API. Sign-in remains a
-preview; the review screen accepts a `settlements:read` API key in page memory.
-The PaxRelay workspace keeps its existing resource routes, such as `/agents`,
-`/policies`, and `/transactions`.
+`/dashboard`, `/admin`, and `/creator` load live API data and refresh every 30 seconds. They show loading, empty, permission, partial-data, and API-error states instead of sample metrics. Admin data is scoped to the connected project, not the whole PaxRelay platform. Creator data is also project-scoped because the API does not yet expose per-creator ownership or authorization. Dashboard access uses a production API key held in browser memory; the sign-in route remains a preview, not an end-user session. The PaxRelay workspace keeps its existing resource routes, such as `/agents`, `/policies`, and `/transactions`.
 
 ## Current application tree
 
@@ -37,7 +30,7 @@ apps/web/
 │   │   ├── layout.tsx                 # Public sign-in route-group layout
 │   │   └── sign-in/page.tsx           # Sign-in preview; buttons are presentation only
 │   ├── admin/
-│   │   ├── page.tsx                   # Platform admin dashboard preview
+│   │   ├── page.tsx                   # Live tenant-scoped production operations dashboard
 │   │   └── settlements/page.tsx       # Read-only settlement review route
 │   ├── agents/page.tsx                # Live tenant agent directory
 │   ├── analytics/page.tsx             # Spend and capability analytics
@@ -45,8 +38,8 @@ apps/web/
 │   │   └── health/route.ts            # Next.js process health response
 │   ├── approvals/page.tsx             # Live approval queue and decisions
 │   ├── creator/
-│   │   └── page.tsx                   # Provider dashboard preview
-│   ├── dashboard/page.tsx             # PaxRelay organisation overview
+│   │   └── page.tsx                   # Live project-scoped provider operations dashboard
+│   ├── dashboard/page.tsx             # Live production project overview
 │   ├── for-providers/page.tsx         # Public service-provider introduction
 │   ├── for-teams/page.tsx             # Public agent-operator introduction
 │   ├── how-it-works/page.tsx          # Public request lifecycle explanation
@@ -188,19 +181,43 @@ and creates or revokes keys with `api-keys:write`. New raw secrets stay in page
 memory and are shown once. The current API does not expose general workspace
 preferences such as network defaults or receipt-retention settings.
 
+### Live production overview data flow
+
+The overview pages at `/dashboard`, `/admin`, and `/creator` compose
+`components/live-dashboard.tsx`. `hooks/use-live-dashboard.ts` requests only the
+resources shown in the selected overview and handles each response separately:
+
+- All three views read `/v1/services`, `/v1/transactions`, and
+  `/v1/analytics/spend`.
+- `/dashboard` also reads `/v1/approvals`.
+- `/admin` reads `/v1/providers` and `/v1/approvals`.
+- `/creator` reads `/v1/receipts`.
+
+Each view refreshes every 30 seconds. A missing scope, API error, empty list,
+or partial response is shown in the affected metric or section. The admin and
+creator views are project-scoped because the API does not provide cross-project
+admin inventory or creator-member ownership filters.
+
+`components/api-session-control.tsx` is in the shared header. It calls the
+production-only session in `lib/api-session.tsx`, which verifies the key with
+`GET /v1/context`, exposes the verified project and scopes, and clears cached
+query data when the key changes or disconnects. `lib/providers.tsx` wraps the
+application in TanStack Query and the API session provider. API requests pass
+through `lib/api-client.ts`; production builds require an HTTPS API base URL.
+
 ## Route map
 
 | URL | File | Purpose and status |
 | --- | --- | --- |
-| `/` | `app/page.tsx` | Public product landing page with product overview and links to the dashboard previews. |
+| `/` | `app/page.tsx` | Public product landing page with product overview and links to dashboard workspaces. |
 | `/sign-in` | `app/(auth)/sign-in/page.tsx` | Sign-in preview. Authentication buttons do not sign in yet. |
 | `/how-it-works` | `app/how-it-works/page.tsx` | Public explanation of the request, policy, payment, provider response, and receipt flow. |
 | `/for-teams` | `app/for-teams/page.tsx` | Public introduction for teams that operate AI agents. |
 | `/for-providers` | `app/for-providers/page.tsx` | Public introduction for online service providers. |
-| `/dashboard` | `app/dashboard/page.tsx` | PaxRelay organisation operations overview; metrics and events are sample data. |
-| `/admin` | `app/admin/page.tsx` | Internal platform admin overview; creator reviews, workspace list, health, and activity are sample data. |
+| `/dashboard` | `app/dashboard/page.tsx` | Live production project overview for services, transactions, approvals, and spend. |
+| `/admin` | `app/admin/page.tsx` | Project-scoped providers, service health, requests, approvals, and settlement review. |
 | `/admin/settlements` | `app/admin/settlements/page.tsx` | Tenant-scoped reconciliation review; reads API data with a `settlements:read` key. |
-| `/creator` | `app/creator/page.tsx` | Service-provider overview; services, requests, payment records, and profile are sample data. |
+| `/creator` | `app/creator/page.tsx` | Project-scoped services, requests, spend, and receipts; not filtered to an individual creator. |
 | `/agents` | `app/agents/page.tsx` | Reads up to 100 agents with `agents:read`; registers agents with `agents:write`; supports local search, status filtering, and copying full agent IDs. |
 | `/policies` | `app/policies/page.tsx` | Reads up to 100 policy summaries with `policies:read`; creates policies and assigns agents with `policies:write`; expands a policy row to show its complete rules and current assignments. |
 | `/approvals` | `app/approvals/page.tsx` | Reads up to 100 recent requests with `approvals:read`; approve/reject requires `approvals:write`, a confirmation step, and supports an optional audit note. |
@@ -214,13 +231,13 @@ preferences such as network defaults or receipt-retention settings.
 
 The admin and creator pages have overview sections for their mobile and desktop
 navigation. Current section destinations use URL fragments, such as
-`/admin#creators`, `/creator#services`, and `/creator#receipts`; these are not
+`/admin#providers`, `/creator#services`, and `/creator#receipts`; these are not
 separate route files. Settlement review is a nested route because it has its
 own API access, loading, empty, error, and populated states.
 
 The public landing page, informational pages, and sign-in preview do not use
 the dashboard shell. The landing page at `/` explains the product and links to
-the sample workspaces. `How it works`, `For teams`, and `For providers` have
+the dashboard workspaces. `How it works`, `For teams`, and `For providers` have
 separate public routes. `/sign-in` is a visual preview because identity
 providers are not yet connected. `components/marketing-chrome.tsx` supplies the
 sticky header and footer for public pages. `components/reveal.tsx` uses Motion
@@ -233,8 +250,8 @@ navigation sets:
 
 | Path prefix | Shell navigation |
 | --- | --- |
-| `/admin` | Platform overview, creators, activity, settlement review, workspaces, platform health, and admin controls |
-| `/creator` | Provider overview, services, requests, receipts, and profile settings |
+| `/admin` | Project providers, services, requests, approvals, settlement review, and project settings |
+| `/creator` | Provider project overview, services, requests, receipts, and project settings |
 | Other dashboard routes | PaxRelay operate, configure, network, evidence, and workspace settings |
 
 On desktop, the fixed navigation rail includes a workspace switcher for
@@ -290,12 +307,7 @@ rules.
 token from its caller and unwraps the API error envelope. Hooks such as
 `hooks/use-analytics.ts`, `hooks/use-transactions.ts`, and
 `hooks/use-settlement-reconciliation.ts` own request state and API response
-types. Read-only dashboard access keys and one-time newly created API secrets
-stay in page memory, never browser storage. The dashboard, admin, and creator
-overviews still show sample data; the resource pages are connected only where
-their matching API route and scope are implemented. The network adapter paths
-and response contracts still require operator confirmation before the data can
-be treated as production settlement evidence.
+types. Dashboard API keys are verified through `GET /v1/context`, held in browser memory, and cleared on disconnect or key change. The workspace, admin, and creator overviews use `hooks/use-live-dashboard.ts` and load live resources independently. Admin and creator overviews remain project-scoped because the API does not yet provide platform-wide or per-creator identity filtering. The network adapter paths and response contracts still require operator confirmation before the data can be treated as production settlement evidence.
 
 ```text
 Route page
@@ -310,9 +322,13 @@ Route page
               apps/api (/v1/...)
 ```
 
-The web application must not connect directly to PostgreSQL. API keys and
-privileged credentials belong on the server. Only explicitly public
-configuration may use a `NEXT_PUBLIC_` environment variable.
+The web application must not connect directly to PostgreSQL. The current
+dashboard connection accepts a scoped production API key in browser memory; it
+is not persisted, but it is still available to the browser runtime. A
+customer-facing multi-user deployment must replace this preview connection
+with server-managed user authentication and authorization. Only explicitly
+public configuration, such as the API base URL, may use a `NEXT_PUBLIC_`
+environment variable.
 
 ### `public/`: brand assets
 

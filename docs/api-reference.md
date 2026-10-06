@@ -25,6 +25,12 @@ is a public liveness route; `/ready` checks PostgreSQL and checks Redis when
 API rate limiting is enabled. Every response includes an `X-Request-ID` header
 for support and log correlation.
 
+`GET /v1/context` returns the verified organisation, project, environment,
+API-key ID, and granted scopes for the presented key. The web console uses it
+to confirm that a key belongs to a production environment before loading
+dashboard data. This endpoint does not grant access to other tenant resources;
+each resource route still enforces its own scope.
+
 Staging and production enable a Redis-backed fixed-window limit of 300 requests
 per API key per 60 seconds by default. Configure the limit with
 `API_RATE_LIMIT_MAX_REQUESTS` and `API_RATE_LIMIT_WINDOW_SECONDS`. Development
@@ -122,6 +128,25 @@ scope set grants no access.
 
 All paths in this section are prefixed with `/v1`. Unless specified otherwise,
 successful creates return HTTP 201 and list routes return newest records first.
+
+### Workspace context
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /context` | Return the verified organisation, project, environment, API-key ID, and grants for the bearer key. Requires a valid API key; resource scopes are enforced separately. |
+
+The dashboard uses this endpoint to reject keys outside the production
+environment before it makes dashboard data requests. Example response:
+
+```json
+{
+  "organisation_id": "11111111-1111-4111-8111-111111111111",
+  "project_id": "22222222-2222-4222-8222-222222222222",
+  "environment": "production",
+  "api_key_id": "33333333-3333-4333-8333-333333333333",
+  "scopes": ["services:read", "transactions:read"]
+}
+```
 
 ### Agents
 

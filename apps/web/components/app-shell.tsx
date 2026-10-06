@@ -6,6 +6,8 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { ApiSessionControl } from "@/components/api-session-control";
+import { useApiSession } from "@/lib/api-session";
 import {
   Activity01Icon,
   Building01Icon,
@@ -34,7 +36,6 @@ const PAXRELAY_GROUPS: NavGroup[] = [
         href: "/approvals",
         label: "Approvals",
         icon: ShieldCheckIcon,
-        count: "2",
       },
     ],
   },
@@ -63,11 +64,11 @@ const PAXRELAY_GROUPS: NavGroup[] = [
 
 const ADMIN_GROUPS: NavGroup[] = [
   {
-    label: "Platform",
+    label: "Production",
     links: [
       { href: "/admin", label: "Overview", icon: Home01Icon },
-      { href: "/admin#creators", label: "Creators", icon: UserGroupIcon },
-      { href: "/admin#activity", label: "Activity", icon: Activity01Icon },
+      { href: "/admin#providers", label: "Providers", icon: UserGroupIcon },
+      { href: "/admin#activity", label: "Requests", icon: Activity01Icon },
       {
         href: "/admin/settlements",
         label: "Settlement review",
@@ -76,11 +77,11 @@ const ADMIN_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Controls",
+    label: "Review",
     links: [
-      { href: "/admin#workspaces", label: "Workspaces", icon: Building01Icon },
-      { href: "/admin#health", label: "Platform health", icon: Activity01Icon },
-      { href: "/admin#settings", label: "Settings", icon: Settings01Icon },
+      { href: "/admin#services", label: "Service health", icon: Building01Icon },
+      { href: "/admin#approvals", label: "Approvals", icon: ShieldCheckIcon },
+      { href: "/settings", label: "Project settings", icon: Settings01Icon },
     ],
   },
 ];
@@ -92,7 +93,7 @@ const CREATOR_GROUPS: NavGroup[] = [
       { href: "/creator", label: "Overview", icon: Home01Icon },
       { href: "/creator#services", label: "Services", icon: Package01Icon },
       {
-        href: "/creator#requests",
+        href: "/creator#activity",
         label: "Requests",
         icon: Notification03Icon,
       },
@@ -103,8 +104,8 @@ const CREATOR_GROUPS: NavGroup[] = [
     label: "Account",
     links: [
       {
-        href: "/creator#profile",
-        label: "Profile & settings",
+        href: "/settings",
+        label: "Project settings",
         icon: Settings01Icon,
       },
     ],
@@ -115,17 +116,17 @@ const WORKSPACES = [
   {
     href: "/dashboard",
     label: "PaxRelay workspace",
-    detail: "Monitor agent activity",
+    detail: "Manage this production project",
   },
   {
     href: "/admin",
-    label: "Admin dashboard",
-    detail: "Manage the PaxRelay platform",
+    label: "Operations dashboard",
+    detail: "Review this production project",
   },
   {
     href: "/creator",
-    label: "Creator dashboard",
-    detail: "Manage your services",
+    label: "Provider dashboard",
+    detail: "Review live services and requests",
   },
 ];
 
@@ -302,6 +303,7 @@ function MobileMoreSheet({
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const apiSession = useApiSession();
   const [moreOpen, setMoreOpen] = useState(false);
   const [fragment, setFragment] = useState("");
   const closeMore = useCallback(() => setMoreOpen(false), []);
@@ -336,23 +338,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         : PAXRELAY_GROUPS;
   const workspaceName =
     workspace === "admin"
-      ? "PaxRelay platform"
+      ? "Production operations"
       : workspace === "creator"
-        ? "Atlas Data Studio"
-        : "Pax Labs";
+        ? "Provider operations"
+        : "PaxRelay workspace";
   const workspaceDetail =
     workspace === "admin"
       ? pathname === "/admin/settlements"
         ? "Settlement review"
-        : "Sample admin preview"
+        : "Production project"
       : workspace === "creator"
-        ? "Sample creator preview"
-        : "Sample workspace";
+        ? "Production project"
+        : "Production project";
   const settingsHref =
     workspace === "admin"
-      ? "/admin#settings"
+      ? "/settings"
       : workspace === "creator"
-        ? "/creator#profile"
+        ? "/settings"
         : "/settings";
   const allLinks = groups.flatMap((group) => group.links);
   const isActive = (href: string) => {
@@ -366,14 +368,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
   const current =
     pathname === "/settings"
-      ? "Settings"
+      ? "Project settings"
       : (allLinks.find((link) => isActive(link.href))?.label ?? "Overview");
 
   const mobileLinks =
     workspace === "admin"
       ? [
           { href: "/admin", label: "Home", icon: Home01Icon },
-          { href: "/admin#creators", label: "Creators", icon: UserGroupIcon },
+          { href: "/admin#providers", label: "Providers", icon: UserGroupIcon },
           {
             href: "/admin/settlements",
             label: "Review",
@@ -389,7 +391,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               icon: Package01Icon,
             },
             {
-              href: "/creator#requests",
+              href: "/creator#activity",
               label: "Requests",
               icon: Notification03Icon,
             },
@@ -456,15 +458,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="network-card">
               <div className="network-line">
                 <span className="network-health">
-                  <i className="pulse" />
-                Sample relay
-              </span>
-              <span>Preview</span>
-            </div>
-            <div className="network-line network-detail">
-              <span>Demo settlement · LayerX</span>
-              <span>247 ms</span>
+                  <i className={apiSession.workspace ? "pulse" : ""} />
+                  {apiSession.workspace ? "Production API" : "API not connected"}
+                </span>
+                <span>{apiSession.workspace ? "Live" : "Connect"}</span>
               </div>
+            <div className="network-line network-detail">
+              <span>Workspace-scoped records</span>
+              <span>{apiSession.workspace ? "Live" : "—"}</span>
+            </div>
             </div>
             <Link
               href="/settings"
@@ -484,15 +486,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {workspaceName}&nbsp;&nbsp;/&nbsp;&nbsp;<strong>{current}</strong>
           </div>
           <div className="top-spacer" />
-          <span className="network-pill network-demo">
-            <i className="sample-mark" aria-hidden="true" />
-            {pathname === "/admin/settlements"
-              ? "Read-only API review"
-              : "Sample data · View only"}
-          </span>
+          <ApiSessionControl />
           <div className="operator">
-            <span className="operator-avatar">SJ</span>
-            <span className="operator-name">Sammy</span>
+            <span className="operator-avatar">PR</span>
+            <span className="operator-name">Operator</span>
           </div>
         </header>
         <main>{children}</main>

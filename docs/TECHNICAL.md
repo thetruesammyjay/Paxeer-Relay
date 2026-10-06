@@ -65,13 +65,36 @@ cd apps/web
 pnpm dev
 ```
 
-The web console is still a prototype and most views use sample data. The
-agents, policies, providers, services, receipts, analytics, and transaction
-pages are connected to their API endpoints when keys with `agents:read`,
-`policies:read`, `providers:read`, `services:read`, `receipts:read`,
-`analytics:read`, or `transactions:read` scope are supplied. Settings lists
-project keys with `api-keys:read` and creates or revokes them with
-`api-keys:write`.
+The dashboard overview at `/dashboard`, `/admin`, and `/creator` reads live,
+tenant-scoped production data. Before connecting a key, the browser requests
+`GET /v1/context` and accepts only a key that the API confirms belongs to the
+`production` environment. Keys for development, test, or staging are rejected.
+The overview reads services, transactions, pending approvals, providers,
+receipts, and 30-day spend independently. A missing scope or failed endpoint
+affects its own section; the rest of the data can still load. These summaries
+refresh every 30 seconds and show when they last updated. No overview metric is
+filled with sample data.
+
+The workspace requires `services:read`, `transactions:read`,
+`approvals:read`, and `analytics:read` for its core metrics. Admin additionally
+uses `providers:read`; creator also uses `receipts:read`. `/admin` is scoped to
+the connected project, not the whole PaxRelay platform. `/creator` also reads
+at project scope because the API does not yet expose per-creator identity or
+ownership filters. Do not use these pages as a substitute for a user-session
+and role authorization layer.
+
+The `api-session` provider keeps the bearer key in browser memory, shares it
+across dashboard pages, clears query data on disconnect or key change, and
+does not write the key to browser storage. Production web builds require an
+HTTPS API base URL. The sign-in page remains a preview; connecting a production
+key is currently the dashboard's access mechanism, not a multi-user SSO
+session. Use narrowly scoped project keys and keep this limitation in view for
+any customer-facing deployment.
+
+The agents, policies, providers, services, receipts, analytics, approvals,
+transactions, and settlement pages also read API endpoints with their matching
+scopes. Settings lists project keys with `api-keys:read` and creates or revokes
+them with `api-keys:write`.
 The agents page reads with `agents:read` and registers agents with
 `agents:write`; a key with both scopes can perform both actions in one session.
 It links an optional wallet address as agent metadata, not as a connected or

@@ -62,11 +62,12 @@ the brand and primary actions. Respect the device safe-area inset.
 
 Use `/` for the public product landing page. Explain what PaxRelay does, show
 the request lifecycle, identify the people it serves, and link visitors to the
-dashboard previews. Keep dedicated pages at `/how-it-works`, `/for-teams`, and
+production dashboard workspaces. Keep dedicated pages at `/how-it-works`, `/for-teams`, and
 `/for-providers` for the request flow and each primary audience. Keep marketing
 sections spacious and use the Ember-to-violet halftone treatment for one
-request illustration. Label dashboard content as sample data while the product
-remains a preview.
+request illustration. Never fill a dashboard with sample data. Show live
+production records only after the API confirms the key's environment; otherwise
+explain how to connect or why a section is unavailable.
 
 Keep sign-in at `/sign-in`, separate from the public homepage. Public marketing
 routes render without the workspace dashboard shell. The current sign-in
@@ -287,8 +288,10 @@ review`, `Workspaces`, `Platform health`, and `Settings`.
 
 Do not place a customer's private transaction or policy settings in the
 platform overview unless the admin's role explicitly grants that access. The
-current page is a sample-data preview; it does not approve creators or change
-platform configuration.
+current `/admin` route reads production records for the connected project only;
+it does not yet provide cross-customer workspace inventory, creator review, or
+platform configuration. A future internal platform dashboard needs a distinct
+administrator identity and dedicated platform-scoped API endpoints.
 
 ### Settlement review
 
@@ -306,16 +309,16 @@ expected and recorded values, available LayerX and L1 references, attempts,
 and the next check time. Never show raw payment proofs. The page refreshes its
 read-only list; it does not start another reconciliation or modify payments.
 
-The sign-in preview is not connected yet. During preview, an operator may
-paste a key with `settlements:read` scope. Keep it in page memory only, clear
-it on disconnect or reload, and label this as a temporary preview access path.
-Replace it with the authenticated admin session before production use; do not
-persist operator API keys in browser storage.
+The sign-in preview is not connected yet. The current settlement page accepts
+only an API key that the API confirms belongs to production and has
+`settlements:read`. Keep the key in memory only, clear it on disconnect or
+reload, and do not persist operator keys in browser storage. This key-based
+connection is not a replacement for an authenticated admin session.
 
 ### Creator dashboard
 
-The `/creator` dashboard is the provider's home for publishing services and
-following work. Keep these regions in this order:
+The `/creator` dashboard is intended to be the provider's home for publishing
+services and following work. Keep these regions in this order:
 
 1. Provider name, availability, and the primary `Manage services` action.
 2. Summary measures for published services, incoming requests, recorded
@@ -328,9 +331,12 @@ following work. Keep these regions in this order:
 6. Provider profile and account settings.
 
 Keep creator navigation short: `Overview`, `Services`, `Requests`, `Receipts`,
-and `Profile & settings`. Do not show tenant-wide agent or policy controls in
-this workspace. The current page is a sample-data preview; publishing,
-provider-scoped authentication, and live creator data are not connected yet.
+and `Project settings`. Do not show tenant-wide agent or policy controls in
+this workspace. The current `/creator` page reads live project-level services,
+requests, spend, and receipts. The API does not yet filter records by creator
+identity, so this view must not imply that each record belongs to the logged-in
+provider. Provider-scoped authentication and profile ownership remain future
+work.
 
 ### Brand assets
 
@@ -354,13 +360,15 @@ provider-scoped authentication, and live creator data are not connected yet.
 | Evidence pages | `apps/web/app/receipts/`, `analytics/` | Live tenant receipt summaries and analytics |
 | Workspace security | `apps/web/app/settings/`, `apps/web/components/api-key-inventory.tsx` | Project API-key inventory, creation, and confirmed revocation |
 | Shared page and state components | `apps/web/components/` | Reusable presentation pieces |
-| API boundary and query hooks | `apps/web/lib/`, `apps/web/hooks/` | Typed HTTP access; not yet wired to every screen |
-| Admin and creator overview pages | `apps/web/app/admin/page.tsx`, `apps/web/app/creator/page.tsx` | Current visual previews using sample data |
-| Settlement review | `apps/web/app/admin/settlements/`, `apps/web/components/settlement-review.tsx` | Tenant-scoped read-only queue, evidence details, and preview API-key entry |
+| API boundary and query hooks | `apps/web/lib/`, `apps/web/hooks/` | Typed HTTP access for connected production screens |
+| Admin and creator overview pages | `apps/web/app/admin/page.tsx`, `apps/web/app/creator/page.tsx` | Live project-scoped production summaries; no platform-wide admin or per-creator identity filtering |
+| Settlement review | `apps/web/app/admin/settlements/`, `apps/web/components/settlement-review.tsx` | Tenant-scoped read-only queue, evidence details, and production-only in-memory API-key entry |
 | Dashboard icons | `@hugeicons/react`, `@hugeicons/core-free-icons` | Hugeicons React renderer and free icon pack |
 
 The Next.js app must call the FastAPI API through `apps/web/lib/`. Browser
-components must not connect directly to PostgreSQL or hold server secrets.
+components must not connect directly to PostgreSQL or hold server secrets. The
+current production API key entry is kept in browser memory; replace it with a
+server-managed user session before offering multi-user customer access.
 
 ## Do
 

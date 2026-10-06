@@ -27,6 +27,7 @@ from paxrelay_api.routes.agents import router as agents_router
 from paxrelay_api.routes.approvals import router as approvals_router
 from paxrelay_api.routes.audit_logs import router as audit_logs_router
 from paxrelay_api.routes.analytics import router as analytics_router
+from paxrelay_api.routes.context import router as context_router
 from paxrelay_api.routes.batch import router as batch_router
 from paxrelay_api.routes.keys import router as keys_router
 from paxrelay_api.routes.policies import router as policies_router
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
 
     app.include_router(agents_router, prefix="/v1")
+    app.include_router(context_router, prefix="/v1")
     app.include_router(approvals_router, prefix="/v1")
     app.include_router(providers_router, prefix="/v1")
     app.include_router(services_router, prefix="/v1")
