@@ -136,12 +136,17 @@ the `mainnet` label. This is a startup guard on the declared environment. Verify
 the RPC and LayerX endpoint identities and the reported chain ID with the
 network operator before submitting any staging payment; the label does not
 independently attest the configured endpoints. Staging must provide its own
-HTTPS `PAXEER_RPC_URL` and `LAYERX_API_URL`; the default mainnet RPC is rejected.
+HTTPS `PAXEER_RPC_URL`; the default mainnet RPC is rejected. Live 402LXP also
+requires a LayerX network ID, USDX asset ID, sequencer public key, public
+gateway URL, provider LayerX account IDs, and the fixed staging test payer.
 
 ## Environment variables
 
-The shared template is [`.env.example`](../.env.example). Important settings
-include:
+The shared template is [`.env.example`](../.env.example). Keep operator buyer
+RPC credentials in `.layerx-buyer.env` on the machine running the buyer
+command. Do not add those credentials to the gateway service environment. The
+repository provides `.layerx-buyer.env.example`; the private file is ignored by
+Git. Important settings include:
 
 | Variable | Used by | Notes |
 | --- | --- | --- |
@@ -199,7 +204,17 @@ include:
 | `APP_ENV` | API, gateway, worker, and web server | Use the same tenant environment for the services; accepted values are `development`, `test`, `staging`, and `production`. The gateway allows private provider URLs and HTTP only in development/test; staging/production require HTTPS and public destination IPs. |
 | `USE_MOCK_ADAPTER` | Gateway and worker | Defaults to true for development. Staging and production startup reject true. |
 | `PAXEER_NETWORK_ENVIRONMENT` | Gateway and worker | Use `testnet` or `staging` for staging deployments and `mainnet` for production. Staging startup rejects `mainnet`. |
-| `LAYERX_API_URL` | Gateway and worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects `GET /transactions/{transaction_hash}` to return the transaction amount, recipient, and quote ID/memo. |
+| `LAYERX_NETWORK_ID` | Gateway | LayerX numeric network identifier included in `layerx:<id>` offers and verified receipts. Required with the official adapter. |
+| `LAYERX_USDX_ASSET_ID` | Gateway | Registered LayerX USDX account/asset ID as 32-byte lowercase or uppercase hex. The offer and receipt must match it. |
+| `LAYERX_SEQUENCER_PUBLIC_KEY` | Gateway | Operator-pinned 32-byte sequencer Ed25519 public key used by the official SDK receipt verifier. |
+| `LAYERX_TESTNET_PAYER_ACCOUNT` | Gateway and buyer | Staging-only 32-byte payer account; the gateway pins it into the offer and rejects a receipt from another account. Keep it empty in production. |
+| `GATEWAY_PUBLIC_BASE_URL` | Gateway | Public HTTPS origin/base used to bind the offer to its exact `/v1/invoke/{tool_call_id}` resource. |
+| `LAYERX_TESTNET_RPC_URL` | Buyer helper | Operator-provided HTTPS LayerX test RPC ending in `/rpc`; used only by `tools/layerx_buyer_prepare.py`. |
+| `LAYERX_TESTNET_API_KEY_ID` | Buyer helper | Operator key ID with `activity:write` permission. |
+| `LAYERX_TESTNET_API_KEY_SECRET` | Buyer helper | Secret for the buyer RPC key. Store in the operator's secret environment and never commit it. |
+| `LAYERX_TESTNET_NETWORK_ID` | Buyer helper | Must match the staging gateway's LayerX network ID. |
+| `LAYERX_TESTNET_SEQUENCER_PUBLIC_KEY` | Buyer helper | Must match the sequencer key pinned by the staging gateway. |
+| `LAYERX_API_URL` | Gateway and worker | Legacy optional adapter URL; it is not used to verify a 402LXP payment receipt. |
 | `PAXEER_ADAPTER_TIMEOUT_SECONDS` | Worker | Timeout for each individual LayerX or settlement read; defaults to 15 seconds. |
 | `PAXEER_SETTLEMENT_API_URL` | Worker | Required as an HTTPS URL when the official adapter is enabled. The adapter expects a read-only `GET /settlement/{settlement_id}` resource. Confirm this assumed path and response fields with the network operator. |
 | `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS` | Worker | Required in staging and production; deployed contract address used to filter receipt logs. |
@@ -220,10 +235,12 @@ started from `apps/api`. Shell environment variables take precedence.
 The intended topology separates the public web app, control plane, gateway,
 worker, PostgreSQL, Redis, and receipt storage. Before exposing any component:
 
-1. Validate the non-mock payment adapter against authoritative Paxeer and
-   LayerX API contracts, including chain finality and replay behavior. The
-   production configuration rejects mock mode but does not validate external
-   payment semantics.
+1. Run the documented, funded testnet 402LXP flow with the operator's trusted
+   sequencer key and verify challenge, receipt, payer binding, single-use
+   behavior, provider delivery, and replay. The official SDK exact/executed
+   receipt path is implemented, but this workspace has not completed that
+   funded network run. Separately validate the other Paxeer wallet, registry,
+   and settlement adapter contracts before relying on them.
 2. Run migrations as a release step, not on every application start.
 3. Use a secret manager for database credentials, signing keys, and webhook
    secrets. Rotate keys through a documented procedure.
@@ -233,11 +250,10 @@ worker, PostgreSQL, Redis, and receipt storage. Before exposing any component:
    DNS answers, pins the selected public IP for each forwarded request, and
    rejects redirects, but it does not verify public hostname ownership. Keep
    request/response size limits enabled.
-6. Validate the LayerX and Paxeer read endpoints against authoritative network
-   contracts and staging records. Confirm transaction field meanings, batch
-   membership, settlement contract address, commitment event topic, and
-   confirmation depth. The worker never advances payment state; it records
-   only evidence that passed these checks.
+6. Validate LayerX and Paxeer reconciliation reads against authoritative
+   network contracts and staging records. Confirm batch membership, settlement
+   contract address, commitment event topic, and confirmation depth. The worker
+   never advances payment state; it records only evidence that passed checks.
 7. Configure orchestrator liveness on `/health` and readiness on `/ready`.
 8. Keep simulator services disabled in production.
 9. Test backups, restoration, key loss, provider failure, and delayed settlement.

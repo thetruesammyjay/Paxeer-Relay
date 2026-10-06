@@ -39,6 +39,7 @@ def _to_provider(m: ProviderModel) -> Provider:
         project_id=as_uuid(m.project_id),
         environment=Environment(m.environment),
         wallet_address=m.wallet_address,
+        layerx_account_id=m.layerx_account_id,
         status=ProviderStatus(m.status),
         description=m.description,
         website_url=m.website_url,
@@ -313,6 +314,7 @@ class SqlAlchemyProviderRepository:
         m.project_id = sid(provider.project_id)
         m.environment = provider.environment.value
         m.wallet_address = provider.wallet_address
+        m.layerx_account_id = provider.layerx_account_id
         m.status = provider.status.value
         m.description = provider.description
         m.website_url = provider.website_url

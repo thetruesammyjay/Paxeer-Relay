@@ -73,6 +73,12 @@ class Container:
             rpc_url=settings.paxeer_rpc_url,
             layerx_api_url=settings.layerx_api_url,
             chain_id=settings.paxeer_chain_id,
+            layerx_network_id=settings.layerx_network_id,
+            layerx_usdx_asset_id=settings.layerx_usdx_asset_id,
+            layerx_sequencer_public_key=settings.layerx_sequencer_public_key,
+            layerx_testnet_payer_account=settings.layerx_testnet_payer_account,
+            gateway_public_base_url=settings.gateway_public_base_url,
+            payment_timeout_seconds=settings.lxp402_quote_ttl_seconds,
         )
 
     @staticmethod
@@ -286,10 +292,21 @@ def create_app() -> FastAPI:
                 else None
             ),
         )
+        payment_signature = request.headers.get("payment-signature")
+        if (
+            payment_signature
+            and result.status_code in {402, 410}
+            and result.tool_call_id is not None
+        ):
+            result = await service.complete(
+                tool_call_id=result.tool_call_id,
+                agent=agent,
+                proof=payment_signature,
+            )
         return JSONResponse(
             status_code=result.status_code,
             content=result.body,
-            headers=_response_headers(request),
+            headers={**_response_headers(request), **result.headers},
         )
 
     @app.post("/v1/invoke/{tool_call_id}")
@@ -302,16 +319,28 @@ def create_app() -> FastAPI:
         body = await _parse_json_body(request, InvokeProofRequest)
         if isinstance(body, JSONResponse):
             return body
+        payment_signature = request.headers.get("payment-signature") or body.proof
+        if not payment_signature:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "payment_signature_required",
+                        "message": "Provide a PAYMENT-SIGNATURE header or proof field.",
+                    }
+                },
+                headers=_response_headers(request),
+            )
         service = _invoke_service(session)
         result = await service.complete(
             tool_call_id=tool_call_id,
             agent=agent,
-            proof=body.proof,
+            proof=payment_signature,
         )
         return JSONResponse(
             status_code=result.status_code,
             content=result.body,
-            headers=_response_headers(request),
+            headers={**_response_headers(request), **result.headers},
         )
 
     @app.get("/health")

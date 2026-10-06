@@ -26,7 +26,7 @@ function errorMessage(error: unknown) {
     if (error.status === 401) return "Your workspace session is no longer valid. Sign in again or reconnect the development key.";
     if (error.status === 403) return "Your current project access needs providers:write permission to register providers.";
     if (error.code === "invalid_request") {
-      return "A payment wallet address is required in production. Add one and try again.";
+      return "Add the payment destination required by the selected environment, then try again.";
     }
     if (error.status === 409) return "That provider ID is already in use in this project and environment.";
     if (error.status === 422) return "Check the provider name, ID, website, and payment address, then try again.";
@@ -44,6 +44,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
+  const [layerxAccountId, setLayerxAccountId] = useState("");
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -57,6 +58,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
       name: name.trim(),
       slug: slug.trim(),
       wallet_address: walletAddress.trim() || null,
+      layerx_account_id: layerxAccountId.trim().toLowerCase() || null,
       description: description.trim() || null,
       website_url: websiteUrl.trim() || null,
     };
@@ -67,6 +69,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
       setSlug("");
       setSlugEdited(false);
       setWalletAddress("");
+      setLayerxAccountId("");
       setDescription("");
       setWebsiteUrl("");
       setOpen(false);
@@ -124,7 +127,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
             <div>
               <h2 className="card-title">Register a provider</h2>
               <p className="card-description">
-                Add a provider to this project. Production providers must include a payment wallet address.
+                Add a provider to this project. Live-payment providers need a LayerX account ID; production profiles also keep their EVM wallet address.
               </p>
             </div>
           </header>
@@ -177,6 +180,21 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
                 placeholder="0x…"
               />
               <small>This records a destination address; it does not connect a wallet or prove ownership.</small>
+            </label>
+            <label className="resource-form-field resource-form-wide">
+              <span>LayerX account ID <small>(required for live payments)</small></span>
+              <input
+                className="search mono"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                pattern="[a-fA-F0-9]{64}"
+                maxLength={64}
+                value={layerxAccountId}
+                onChange={(event) => setLayerxAccountId(event.target.value)}
+                placeholder="64-character LayerX account ID"
+              />
+              <small>LayerX payment destination, as 32-byte lowercase hexadecimal.</small>
             </label>
             <label className="resource-form-field resource-form-wide">
               <span>Website <small>(optional)</small></span>

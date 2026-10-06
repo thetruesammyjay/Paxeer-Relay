@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "PaxRelay adapter layer for Paxeer Network (wallets, LayerX, 402LXP, registry, settlement)"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=41.0.0",
     "httpx>=0.27.0",
+    "layerx-sdk",
     "pydantic>=2.9.0",
     "paxrelay-domain",
 ]
@@ -13,6 +15,7 @@ dependencies = [
 paxrelay-validate-402lxp-offer = "paxrelay_paxeer.offer_cli:main"
 
 [tool.uv.sources]
+layerx-sdk = { git = "https://github.com/Sidiora-Labs/Paxeer-X-Network.git", rev = "e9e8b0e06da53f42c6e8607242941f214c508b59", subdirectory = "agent/sdk/python" }
 paxrelay-domain = { workspace = true }
 
 [build-system]

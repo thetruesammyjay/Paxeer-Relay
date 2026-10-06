@@ -354,13 +354,21 @@ export function ProviderDirectory() {
                             </div>
                           </td>
                           <td>
-                            {provider.wallet_address ? (
-                              <code className="mono" title={provider.wallet_address}>
-                                {displayWallet(provider.wallet_address)}
-                              </code>
-                            ) : (
-                              <span className="muted">No wallet configured</span>
-                            )}
+                            <div className="provider-payment-destinations">
+                              {provider.wallet_address ? (
+                                <code className="mono" title={provider.wallet_address}>
+                                  EVM {displayWallet(provider.wallet_address)}
+                                </code>
+                              ) : null}
+                              {provider.layerx_account_id ? (
+                                <code className="mono" title={provider.layerx_account_id}>
+                                  LayerX {provider.layerx_account_id.slice(0, 10)}…{provider.layerx_account_id.slice(-8)}
+                                </code>
+                              ) : null}
+                              {!provider.wallet_address && !provider.layerx_account_id ? (
+                                <span className="muted">No payment destination configured</span>
+                              ) : null}
+                            </div>
                           </td>
                           <td>{provider.environment}</td>
                           <td>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
@@ -119,6 +120,13 @@ class Provider(BaseModel):
     project_id: UUID
     environment: Environment = Environment.DEVELOPMENT
     wallet_address: WalletAddress | None = None
+    layerx_account_id: str | None = Field(
+        default=None,
+        min_length=64,
+        max_length=64,
+        pattern=r"^[0-9a-f]{64}$",
+        description="LayerX 32-byte account identifier in lowercase hexadecimal.",
+    )
     status: ProviderStatus = ProviderStatus.ACTIVE
     description: str | None = None
     website_url: str | None = None
@@ -126,6 +134,11 @@ class Provider(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator("layerx_account_id")
+    @classmethod
+    def normalise_layerx_account_id(cls, value: str | None) -> str | None:
+        return value.lower() if value is not None else None
 
     def is_operable(self) -> bool:
         return self.status == ProviderStatus.ACTIVE

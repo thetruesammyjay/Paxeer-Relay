@@ -56,7 +56,7 @@ add, change, and revoke project access; they do not send invitation email.
 
 | Table | Purpose |
 | --- | --- |
-| `providers` | Provider identity, status, optional wallet and website |
+| `providers` | Provider identity, status, EVM wallet, optional LayerX account ID, and website |
 | `services` | Provider service name, capability, supported protocol, price, endpoint base, delivery and health configuration |
 | `service_versions` | Immutable invocation target with protocol, endpoint URL, pricing, delivery configuration, and optional HTTP or MCP schema/tool metadata |
 | `provider_metrics` | Reputation, success, latency, availability, call count, failure streak, and health status |
@@ -78,13 +78,17 @@ success, latency, and failure-streak metrics from execution attempts.
 | --- | --- |
 | `tool_calls` | One logical agent request, with tenant scope, capability, arguments, request hash, idempotency key, completed provider result for replay, and independent request/payment/execution states |
 | `route_decisions` | Provider/service version selected for the call, strategy, score, breakdown, explanation, and attempt number |
-| `quotes` | Immutable payment requirement: amount, recipient, chain, request hash, nonce, and expiry |
+| `quotes` | Immutable payment requirement: amount, destination account, chain, request hash, nonce, and expiry; the destination can be a 32-byte LayerX account ID |
 | `budget_reservations` | Per-agent amount held against daily/monthly policy budgets while a quote is valid; expired quotes stop counting, and verified payment consumes the reservation atomically |
 | `payment_intents` | Intended payment associated with a quote and tool call |
 | `payments` | Submitted/verified payment proof, LayerX references, and settlement timestamps |
 | `execution_attempts` | Each provider forward attempt, status, HTTP code, timestamps, latency, and retryability |
 | `execution_receipts` | Canonical receipt JSON, hashes, signature, signing key ID, and issue time |
 | `settlement_records` | LayerX transaction/batch and L1 settlement/anchor details, local/external check times, retry count/lease, reconciliation status, and safe mismatch issue codes |
+
+Migration `0019_layerx_testnet_accounts` stores provider LayerX account IDs and
+widened payment destination columns to 64 characters. The EVM wallet remains a
+separate field; PaxRelay does not derive a LayerX account ID from it.
 
 Provider indexing uses a composite index on execution-attempt service-version,
 creation time, and ID so its rolling window queries can find recent attempts

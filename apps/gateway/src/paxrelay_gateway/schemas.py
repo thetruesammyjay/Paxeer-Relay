@@ -25,4 +25,4 @@ class InvokeRequest(BaseModel):
 class InvokeProofRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    proof: str = Field(min_length=1, max_length=65_536)
+    proof: str | None = Field(default=None, min_length=1, max_length=65_536)

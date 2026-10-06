@@ -11,7 +11,7 @@ reservation have explicit commit boundaries before the provider network call.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID, uuid4
@@ -49,6 +49,7 @@ from paxrelay_db.repositories import (
 from paxrelay_receipts import hash_body
 from paxrelay_policy import PolicyEvaluator
 from paxrelay_router import ProviderRouter
+from paxrelay_paxeer.errors import AdapterConfigurationError
 
 from paxrelay_gateway.payment.quotes import build_quote, quote_to_requirement_input
 from paxrelay_gateway.policy.service import PolicyGateError, evaluate_request
@@ -86,6 +87,7 @@ class QuoteResult:
     status_code: int
     body: dict[str, Any]
     tool_call_id: UUID | None = None
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -95,6 +97,7 @@ class InvokeResult:
     status_code: int
     body: dict[str, Any]
     tool_call_id: UUID | None = None
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 class GatewayInvokeService:
@@ -200,10 +203,20 @@ class GatewayInvokeService:
                         ),
                         tool_call_id=existing.id,
                     )
+                payment_repo = SqlAlchemyPaymentRepository(self._session)
+                stored_quote = await payment_repo.get_quote_by_tool_call(existing.id)
+                stored_payment = await payment_repo.get_by_tool_call(existing.id)
                 return QuoteResult(
                     status_code=200,
                     body=replay_body,
                     tool_call_id=existing.id,
+                    headers=(
+                        await self._stored_payment_response_headers(
+                            stored_payment, stored_quote
+                        )
+                        if stored_quote is not None
+                        else {}
+                    ),
                 )
             if existing.request_state == RequestState.PAYMENT_REQUIRED:
                 payment_repo = SqlAlchemyPaymentRepository(self._session)
@@ -226,17 +239,7 @@ class GatewayInvokeService:
                         ),
                         tool_call_id=existing.id,
                     )
-                requirement = await self._paxeer.create_payment_requirement(
-                    quote_to_requirement_input(quote)
-                )
-                return QuoteResult(
-                    status_code=402,
-                    body={
-                        "payment_requirement": requirement,
-                        "tool_call_id": str(existing.id),
-                    },
-                    tool_call_id=existing.id,
-                )
+                return await self._payment_challenge(quote, existing.id)
             if existing.request_state == RequestState.APPROVAL_PENDING:
                 approval_stmt = (
                     select(ApprovalRequestModel)
@@ -377,7 +380,10 @@ class GatewayInvokeService:
                 or best_metrics is None
                 or not best_metrics.health_check_passing
                 or not provider.is_operable()
-                or (self._require_provider_wallet and not provider.wallet_address)
+                or (
+                    self._require_provider_wallet
+                    and not self._provider_payment_recipient(provider)
+                )
                 or not _supports_service_version(best_svc, _best_ver)
                 or best_svc.status.value != "active"
                 or best_svc.environment != agent.environment
@@ -399,7 +405,7 @@ class GatewayInvokeService:
                     ),
                     tool_call_id=call.id,
                 )
-            current_recipient = provider.wallet_address or _ZERO_ADDRESS
+            current_recipient = self._provider_payment_recipient(provider)
             if current_recipient.lower() != approval.recipient_address.lower():
                 approval.status = "invalidated"
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
@@ -470,7 +476,7 @@ class GatewayInvokeService:
             await routes.save(route)
             provider = await providers.get(route.provider_id)
             if self._require_provider_wallet and (
-                provider is None or not provider.wallet_address
+                provider is None or not self._provider_payment_recipient(provider)
             ):
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
                 await tool_calls.save(call)
@@ -478,11 +484,15 @@ class GatewayInvokeService:
                     status_code=503,
                     body=_err(
                         "provider_payment_destination_missing",
-                        "The selected provider has no configured payment wallet.",
+                        "The selected provider has no configured payment destination.",
                     ),
                     tool_call_id=call.id,
                 )
-            recipient = (provider.wallet_address if provider else None) or _ZERO_ADDRESS
+            recipient = (
+                self._provider_payment_recipient(provider)
+                if provider is not None
+                else None
+            ) or _ZERO_ADDRESS
             price = _best_ver.pricing.price_per_call or MonetaryAmount.zero()
 
         if not _supports_service_version(best_svc, _best_ver):
@@ -681,7 +691,9 @@ class GatewayInvokeService:
                 tool_call_id=call.id,
             )
 
-        # 5. Build the quote and return the 402 challenge.
+        # 5. Build the quote and challenge before persistence. A live adapter
+        # configuration or offer error must not leave a quote and budget
+        # reservation behind without returning a usable 402 response.
         quote = build_quote(
             tool_call_id=call.id,
             provider_id=route.provider_id,
@@ -692,6 +704,21 @@ class GatewayInvokeService:
             ttl_seconds=self._quote_ttl_seconds,
             chain_id=self._chain_id,
         )
+        try:
+            challenge = await self._payment_challenge(quote, call.id)
+        except AdapterConfigurationError:
+            if approval is not None:
+                approval.status = "invalidated"
+            call = call.model_copy(update={"request_state": RequestState.FAILED})
+            await tool_calls.save(call)
+            return QuoteResult(
+                status_code=503,
+                body=_err(
+                    "payment_offer_unavailable",
+                    "The configured payment network cannot create a valid offer for this service.",
+                ),
+                tool_call_id=call.id,
+            )
         await SqlAlchemyPaymentRepository(self._session).save_quote(quote)
         call = call.model_copy(
             update={
@@ -705,13 +732,29 @@ class GatewayInvokeService:
         if approval is not None:
             approval.status = "consumed"
 
+        return challenge
+
+    def _provider_payment_recipient(self, provider: Any) -> str | None:
+        """Select the destination format required by the configured adapter."""
+        if getattr(self._paxeer, "supports_402lxp_http_v2", False):
+            return provider.layerx_account_id
+        return provider.wallet_address
+
+    async def _payment_challenge(self, quote: Any, tool_call_id: UUID) -> QuoteResult:
+        """Build the JSON response and, for live LayerX, the standard header."""
         requirement = await self._paxeer.create_payment_requirement(
             quote_to_requirement_input(quote)
         )
+        headers: dict[str, str] = {}
+        if getattr(self._paxeer, "supports_402lxp_http_v2", False):
+            headers["PAYMENT-REQUIRED"] = self._paxeer.encode_payment_required(
+                requirement
+            )
         return QuoteResult(
             status_code=402,
-            body={"payment_requirement": requirement, "tool_call_id": str(call.id)},
-            tool_call_id=call.id,
+            body={"payment_requirement": requirement, "tool_call_id": str(tool_call_id)},
+            tool_call_id=tool_call_id,
+            headers=headers,
         )
 
     # ------------------------------------------------------------------
@@ -740,6 +783,11 @@ class GatewayInvokeService:
         ):
             # Do not reveal whether another agent's tool-call ID exists.
             return InvokeResult(status_code=404, body=_err("not_found", "tool_call_not_found"))
+        quote = await payments.get_quote_by_tool_call(call.id)
+        if quote is None:
+            return InvokeResult(status_code=404, body=_err("not_found", "quote_not_found"))
+        quote_expired = quote.is_expired()
+        existing_payment = await payments.get_by_tool_call(call.id)
         if call.request_state == RequestState.DELIVERED:
             replay_body = await self._completed_result_body(call)
             if replay_body is None:
@@ -755,76 +803,22 @@ class GatewayInvokeService:
                 status_code=200,
                 body=replay_body,
                 tool_call_id=call.id,
-            )
-
-        quote = await payments.get_quote_by_tool_call(call.id)
-        if quote is None:
-            return InvokeResult(status_code=404, body=_err("not_found", "quote_not_found"))
-        if call.request_state == RequestState.PAYMENT_REQUIRED and quote.is_expired():
-            return InvokeResult(
-                status_code=410,
-                body=_err(
-                    "quote_expired",
-                    "The payment quote has expired. Start a new request to continue.",
+                headers=await self._stored_payment_response_headers(
+                    existing_payment, quote
                 ),
-                tool_call_id=call.id,
             )
-
-        providers = SqlAlchemyProviderRepository(self._session)
-        service_version = await providers.get_service_version(quote.service_version_id)
-        service = (
-            await providers.get_service(service_version.service_id)
-            if service_version is not None
-            else None
-        )
-        provider = await providers.get(quote.provider_id)
-        metrics = (
-            await providers.get_metrics(service.id)
-            if service is not None
-            else None
-        )
-        if (
-            service_version is None
-            or service is None
-            or provider is None
-            or service_version.provider_id != quote.provider_id
-            or service.provider_id != quote.provider_id
-            or service.organisation_id != agent.organisation_id
-            or service.project_id != agent.project_id
-            or service.environment != agent.environment
-            or not _supports_service_version(service, service_version)
-            or provider.organisation_id != agent.organisation_id
-            or provider.project_id != agent.project_id
-            or provider.environment != agent.environment
-            or not provider.is_operable()
-            # An operator pause prevents new routes. The manual inactive state
-            # alone must not invalidate a quote that was already issued.
-            or service.status.value == "deprecated"
-            or not service_version.is_active
-            or metrics is None
-            or not metrics.health_check_passing
-        ):
+        if existing_payment is not None:
             return InvokeResult(
                 status_code=409,
                 body=_err(
-                    "service_unavailable",
-                    "The quoted service is no longer available. Start a new request when it is available again.",
+                    "payment_already_recorded",
+                    "Payment was already recorded for this request. The provider will not be called again.",
                 ),
                 tool_call_id=call.id,
+                headers=await self._stored_payment_response_headers(
+                    existing_payment, quote
+                ),
             )
-
-        if service_version.protocol == ServiceProtocol.MCP:
-            try:
-                validate_mcp_arguments(service_version.mcp_input_schema, call.arguments)
-            except McpToolContractError:
-                return InvokeResult(
-                    status_code=409,
-                    body=_err(
-                        "service_version_invalid",
-                        "The quoted MCP service contract is invalid. Start a new request.",
-                    ),
-                    tool_call_id=call.id,
-                )
 
         # 1. Verify the proof (local checklist + adapter, fail-closed).
         try:
@@ -843,8 +837,12 @@ class GatewayInvokeService:
                 body=_err("payment_not_verified", exc.reason),
                 tool_call_id=call.id,
             )
+        payment_response_headers = self._payment_response_headers(
+            verification, quote
+        )
 
         if not await payments.consume_nonce(quote.id, quote.nonce, call.agent_id):
+            already_recorded = await payments.get_by_tool_call(call.id)
             return InvokeResult(
                 status_code=409,
                 body=_err(
@@ -852,6 +850,9 @@ class GatewayInvokeService:
                     "This quote has already been submitted.",
                 ),
                 tool_call_id=call.id,
+                headers=await self._stored_payment_response_headers(
+                    already_recorded, quote
+                ),
             )
 
         # 2. Consume the nonce and record the verified payment in one transaction.
@@ -893,6 +894,81 @@ class GatewayInvokeService:
         # crash or provider failure cannot make this proof reusable.
         await self._session.commit()
 
+        if quote_expired:
+            return InvokeResult(
+                status_code=410,
+                body=_err(
+                    "quote_expired_after_payment",
+                    "Payment was verified after the quote expired. The request was not forwarded; retain the payment receipt for support.",
+                ),
+                tool_call_id=call.id,
+                headers=payment_response_headers,
+            )
+
+        # The buyer may have paid before sending its proof. Check live service
+        # state only after verifying and recording that payment, so a health
+        # change cannot hide a real transfer from the buyer's receipt.
+        providers = SqlAlchemyProviderRepository(self._session)
+        service_version = await providers.get_service_version(quote.service_version_id)
+        service = (
+            await providers.get_service(service_version.service_id)
+            if service_version is not None
+            else None
+        )
+        provider = await providers.get(quote.provider_id)
+        metrics = (
+            await providers.get_metrics(service.id)
+            if service is not None
+            else None
+        )
+        if (
+            service_version is None
+            or service is None
+            or provider is None
+            or service_version.provider_id != quote.provider_id
+            or service.provider_id != quote.provider_id
+            or service.organisation_id != agent.organisation_id
+            or service.project_id != agent.project_id
+            or service.environment != agent.environment
+            or not _supports_service_version(service, service_version)
+            or provider.organisation_id != agent.organisation_id
+            or provider.project_id != agent.project_id
+            or provider.environment != agent.environment
+            or not provider.is_operable()
+            or service.status.value == "deprecated"
+            or not service_version.is_active
+            or metrics is None
+            or not metrics.health_check_passing
+            or (
+                getattr(self._paxeer, "supports_402lxp_http_v2", False)
+                and self._provider_payment_recipient(provider)
+                != quote.recipient_address
+            )
+        ):
+            return InvokeResult(
+                status_code=409,
+                body=_err(
+                    "payment_received_service_unavailable",
+                    "Payment was verified, but the quoted service is no longer available. Retain the payment receipt for support.",
+                ),
+                tool_call_id=call.id,
+                headers=payment_response_headers,
+            )
+
+        if service_version.protocol == ServiceProtocol.MCP:
+            try:
+                validate_mcp_arguments(service_version.mcp_input_schema, call.arguments)
+            except McpToolContractError:
+                return InvokeResult(
+                    status_code=409,
+                    body=_err(
+                        "payment_received_service_contract_invalid",
+                        "Payment was verified, but the quoted MCP contract is no longer valid. Retain the payment receipt for support.",
+                    ),
+                    tool_call_id=call.id,
+                    headers=payment_response_headers,
+                )
+
         # 3. Forward the authorised request to the provider.
         providers = SqlAlchemyProviderRepository(self._session)
         version = await providers.get_service_version(quote.service_version_id)
@@ -903,6 +979,7 @@ class GatewayInvokeService:
                 status_code=503,
                 body=_err("service_version_missing", "Service version not found."),
                 tool_call_id=call.id,
+                headers=payment_response_headers,
             )
 
         call = call.model_copy(
@@ -977,6 +1054,7 @@ class GatewayInvokeService:
                 status_code=502,
                 body=_err("provider_error", forward.error_code or "provider_failed"),
                 tool_call_id=call.id,
+                headers=payment_response_headers,
             )
 
         # 4. Generate and sign the execution receipt.
@@ -1020,7 +1098,38 @@ class GatewayInvokeService:
                 "receipt": receipt.model_dump(mode="json"),
             },
             tool_call_id=call.id,
+            headers=payment_response_headers,
         )
+
+    def _payment_response_headers(
+        self, verification: dict[str, Any], quote: Any
+    ) -> dict[str, str]:
+        """Build the LayerX settlement header for any verified payment result."""
+        if not getattr(self._paxeer, "supports_402lxp_http_v2", False):
+            return {}
+        return {
+            "PAYMENT-RESPONSE": self._paxeer.encode_payment_response(
+                verification, quote_to_requirement_input(quote)
+            )
+        }
+
+    async def _stored_payment_response_headers(
+        self, payment: Payment | None, quote: Any
+    ) -> dict[str, str]:
+        """Recreate an already-recorded payment response without provider replay."""
+        if (
+            payment is None
+            or not payment.proof
+            or not getattr(self._paxeer, "supports_402lxp_http_v2", False)
+        ):
+            return {}
+        try:
+            verification = await verify_payment_proof(
+                proof=payment.proof, quote=quote, adapter=self._paxeer
+            )
+        except (VerificationError, VerificationUnavailableError):
+            return {}
+        return self._payment_response_headers(verification, quote)
 
     async def _completed_result_body(self, call: ToolCall) -> dict[str, Any] | None:
         """Rebuild the original success envelope for an idempotent replay."""

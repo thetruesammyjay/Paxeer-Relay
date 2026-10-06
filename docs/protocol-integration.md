@@ -29,7 +29,7 @@ other documented levels are `batched` and `finalised` (the spelling
 activity ID is not payment evidence. The transport is LayerX JSON-RPC at
 `POST /rpc`; the merchant settlement route is `POST /v1/settle`.
 
-## What this repository validates today
+## PaxRelay implementation
 
 `packages/paxeer-adapter/src/paxrelay_paxeer/x402_http.py` strictly decodes and
 checks a `PAYMENT-REQUIRED` header: protocol version, envelope size, duplicate
@@ -48,35 +48,48 @@ The probe never sends `PAYMENT-SIGNATURE` and never pays. Its success means
 only that the provider's offer matches the checked envelope shape; it does not
 verify a receipt, settle funds, or qualify an endpoint for production.
 
-## Current implementation boundary
+The gateway's live adapter now builds an official v2 exact-payment offer and
+returns it in both the JSON body and the base64 `PAYMENT-REQUIRED` response
+header. It supports `exact` offers with `executed` commitment and USDX only.
+The standard `PAYMENT-SIGNATURE` header is accepted on a retry to
+`POST /v1/invoke`; the existing `POST /v1/invoke/{tool_call_id}` route also
+accepts the header or a JSON `proof` field. A successful invocation includes a
+`PAYMENT-RESPONSE` header with the verified receipt and `lxp:` settlement
+reference.
 
-The gateway currently returns a PaxRelay-specific JSON `402` body. That body
-is not the published HTTP v2 `PAYMENT-REQUIRED` header. The SDK buyer flow,
-LayerX receipt resolution and signature verification, payment response
-handling, and official JSON-RPC read methods are not integrated yet.
+The official LayerX Python SDK is pinned to source commit
+`e9e8b0e06da53f42c6e8607242941f214c508b59` from its repository's
+[`agent/sdk/python` directory](https://github.com/Sidiora-Labs/Paxeer-X-Network/tree/e9e8b0e06da53f42c6e8607242941f214c508b59/agent/sdk/python).
+PaxRelay uses its `BuyerMiddleware`, HTTP envelope codec, and
+`verify_payment_receipt` verifier. The upstream distribution is installed from
+the pinned source rather than PyPI's unrelated package with the same name.
+The SDK does not expose a public decoder for the receipt fields needed to
+construct `AuthorizedReceiptBatch`; the integration uses the SDK's private
+decoder and therefore pins that exact source commit.
 
-Accordingly:
+Receipt verification uses the operator-pinned sequencer public key and binds
+the signed receipt to the quoted amount, USDX asset, provider's LayerX account,
+configured network, resource URL, and (in staging) the configured test payer.
+It also requires the receipt to be a successful Asset `SEND` operation, so a
+matching transfer produced by another module cannot satisfy the offer.
+The exact payment nonce remains single-use in PaxRelay's database. A verified
+payment is committed before any provider request is made.
 
-- `OfficialPaxeerAdapter.create_payment_requirement` retains the legacy
-  PaxRelay quote format for compatibility; it is not an official v2 offer.
-- `OfficialPaxeerAdapter.verify_payment` now fails closed with
-  `layerx_402lxp_v2_verifier_not_integrated`.
-- The old undocumented `/transactions/{hash}` and `/batches/{id}` REST reads
-  are disabled. They cannot authorize provider execution or reconciliation.
-- The remaining wallet, registry, and settlement REST surfaces in the partial
-  adapter also need contract confirmation before they can be treated as
-  authoritative network data.
-- Use `USE_MOCK_ADAPTER=true` only for the clearly labelled local simulation.
-  A mock response is not a testnet or real payment.
+`tools/layerx_buyer_prepare.py` creates the buyer header with the upstream
+`BuyerMiddleware`. It reads the operator's test RPC endpoint and API key from
+environment variables and accepts a canonical activity that has already been
+signed by the payer's authority. It never reads a private key. It prints a
+preflight summary by default; adding `--submit` sends the activity and asks the
+SDK to verify the resulting receipt before printing `payment_signature`.
 
-The official Python SDK is documented in the upstream Paxeer X repository's
-[`agent/sdk/python` directory](https://github.com/Sidiora-Labs/Paxeer-X-Network/tree/main/agent/sdk/python)
-and [payment guide](https://github.com/Sidiora-Labs/Paxeer-X-Network/blob/main/docs/wiki/PaymentsQuickstart.md).
-The integration still needs a pinned SDK release, configured
-LayerX test-network RPC and credentials, a test payer with funds, an exact
-payment offer, receipt resolution, signed receipt verification, replay-safe
-settlement, and an end-to-end staging run. Do not set the adapter to a live
-environment and describe it as payment-enabled before those checks pass.
+This code integration is ready for controlled staging configuration, but no
+funded testnet transaction has been run from this workspace: the local
+environment does not contain LayerX test credentials, a funded payer, a signed
+test activity, or a verified testnet sequencer key. The following non-mock
+surfaces remain separate operator contracts and are not evidence for this
+402LXP path: wallet REST, registry REST, L1 settlement REST, and LayerX batch
+reconciliation reads. Keep real-value production payment release dependent on
+network-operator validation and a successful staging run.
 
 ## Paxeer L1 settlement
 

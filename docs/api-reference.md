@@ -203,6 +203,11 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 | `GET /services/{service_id}` | Get one service. |
 | `PATCH /services/{service_id}/status` | Pause or resume a service for new routes; requires `services:write`. |
 
+Provider creation accepts the optional EVM `wallet_address` and
+`layerx_account_id`. Staging providers must set `layerx_account_id` to a
+32-byte, 64-character hexadecimal account ID; live 402LXP offers pay that
+account. Production provider onboarding still requires the EVM wallet address.
+
 Service create bodies contain `name`, `slug`, `capability`, `protocols`,
 `price_per_call`, `base_url`, `endpoint_url`, `version`, and optional
 `description` and `health` settings. `protocols` must contain exactly one
@@ -510,8 +515,13 @@ organisation, project, and environment.
 }
 ```
 
-On success the gateway first returns HTTP 402 with a `payment_requirement`
-and `tool_call_id`. A missing eligible service returns 503. A missing active
+The mock adapter returns HTTP 402 with its simulated `payment_requirement` and
+`tool_call_id`. With the official adapter, the gateway returns an HTTP 402
+LayerX 402LXP v2 envelope in both the `PAYMENT-REQUIRED` header and
+`payment_requirement` body. A client can retry the same request and
+idempotency key with the `PAYMENT-SIGNATURE` header; the gateway verifies the
+receipt before forwarding and returns a `PAYMENT-RESPONSE` header after a
+successful provider response. A missing eligible service returns 503. A missing active
 policy or an enforced policy denial returns 403. A policy result that requires
 approval returns HTTP 202 with an `approval_id`; a reviewer decides through
 the control-plane approval routes above.
@@ -527,8 +537,9 @@ replay.
 ### `POST /v1/invoke/{tool_call_id}`
 
 Required headers: the same bearer key and `X-Agent-Id` used to create the call.
-The tool call must belong to that exact agent. Submit the payment proof as a
-JSON string:
+The tool call must belong to that exact agent. Live callers may submit the
+base64 value from `PAYMENT-SIGNATURE` as a request header. The JSON `proof`
+field remains supported for clients using the two-stage API:
 
 ```json
 {"proof":"{\"quote_id\":\"...\",\"request_hash\":\"...\",\"amount_atomic\":1000000,\"recipient\":\"0x...\",\"nonce\":\"...\",\"chain_id\":125,\"payment_scheme\":\"402LXP\"}"}
@@ -538,7 +549,9 @@ A verified payment is forwarded to the selected HTTP service with the original
 arguments as a JSON POST body, or to the selected MCP tool over Streamable HTTP.
 The gateway checks the MCP tool name and schema against the immutable service
 version before calling it. A successful provider result returns `result` and a
-signed `receipt`. Proof failures return HTTP 402; reusing an already consumed
+signed `receipt`. Live successful responses include `PAYMENT-RESPONSE` with
+the verified LayerX receipt and `lxp:<receipt_digest>` reference. Proof
+failures return HTTP 402; reusing an already consumed
 quote returns HTTP 409; provider failures return HTTP 502. Payment verification
 and service delivery remain separate states.
 

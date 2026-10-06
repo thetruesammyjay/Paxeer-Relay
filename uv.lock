@@ -396,6 +396,11 @@ wheels = [
 ]
 
 [[package]]
+name = "layerx-sdk"
+version = "0.1.0"
+source = { git = "https://github.com/Sidiora-Labs/Paxeer-X-Network.git?subdirectory=agent%2Fsdk%2Fpython&rev=e9e8b0e06da53f42c6e8607242941f214c508b59#e9e8b0e06da53f42c6e8607242941f214c508b59" }
+
+[[package]]
 name = "mako"
 version = "1.3.12"
 source = { registry = "https://pypi.org/simple" }
@@ -715,14 +720,18 @@ name = "paxrelay-paxeer"
 version = "0.1.0"
 source = { editable = "packages/paxeer-adapter" }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
+    { name = "layerx-sdk" },
     { name = "paxrelay-domain" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=41.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "layerx-sdk", git = "https://github.com/Sidiora-Labs/Paxeer-X-Network.git?subdirectory=agent%2Fsdk%2Fpython&rev=e9e8b0e06da53f42c6e8607242941f214c508b59" },
     { name = "paxrelay-domain", editable = "packages/domain" },
     { name = "pydantic", specifier = ">=2.9.0" },
 ]

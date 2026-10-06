@@ -56,7 +56,7 @@ class QuoteModel(Base, TimestampMixin):
     payment_scheme: Mapped[str] = mapped_column(String(16), default="402LXP", nullable=False)
     chain_id: Mapped[int] = mapped_column(Integer, default=125, nullable=False)
     settlement_layer: Mapped[str] = mapped_column(String(32), default="layerx", nullable=False)
-    recipient_address: Mapped[str] = mapped_column(String(42), nullable=False)
+    recipient_address: Mapped[str] = mapped_column(String(64), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(66), nullable=False)
     nonce: Mapped[str] = mapped_column(String(66), nullable=False, unique=True, index=True)
     quote_signature: Mapped[str | None] = mapped_column(Text, nullable=True)

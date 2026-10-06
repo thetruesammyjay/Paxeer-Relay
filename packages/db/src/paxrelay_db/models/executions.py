@@ -156,7 +156,7 @@ class ApprovalRequestModel(Base, TenantMixin, TimestampMixin):
     capability: Mapped[str] = mapped_column(String(256), nullable=False)
     provider_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
     service_version_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
-    recipient_address: Mapped[str | None] = mapped_column(String(42), nullable=True)
+    recipient_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
     policy_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=False), nullable=True)
     policy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)

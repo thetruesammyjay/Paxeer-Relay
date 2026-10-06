@@ -28,6 +28,7 @@ def _provider_out(p: Provider) -> ProviderOut:
         project_id=p.project_id,
         environment=p.environment.value,
         wallet_address=p.wallet_address,
+        layerx_account_id=p.layerx_account_id,
         status=p.status.value,
         is_verified=p.is_verified,
         description=p.description,
@@ -51,6 +52,10 @@ async def create_provider(
         raise InvalidRequestError(
             "Production providers must configure a payment wallet address."
         )
+    if tenant.environment in {"staging", "production"} and body.layerx_account_id is None:
+        raise InvalidRequestError(
+            "Live-payment providers must configure a LayerX account ID."
+        )
     repo = SqlAlchemyProviderRepository(session)
     provider = Provider(
         name=body.name,
@@ -59,6 +64,11 @@ async def create_provider(
         project_id=tenant.project_id,
         environment=tenant.environment,
         wallet_address=body.wallet_address,
+        layerx_account_id=(
+            body.layerx_account_id.lower()
+            if body.layerx_account_id is not None
+            else None
+        ),
         description=body.description,
         website_url=body.website_url,
     )

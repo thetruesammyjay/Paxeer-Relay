@@ -41,6 +41,7 @@ def quote_to_requirement_input(quote: Quote) -> dict:
     """Shape a quote into the dict the Paxeer adapter's requirement builder wants."""
     return {
         "quote_id": str(quote.id),
+        "tool_call_id": str(quote.tool_call_id),
         "amount_atomic": quote.amount.amount_atomic,
         "currency": quote.amount.currency.value,
         "currency_decimals": quote.amount.decimals,

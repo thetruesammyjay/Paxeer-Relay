@@ -102,6 +102,11 @@ class GatewaySettings(BaseSettings):
     paxeer_chain_id: int = Field(default=125, ge=1)
     paxeer_rpc_url: str = _MAINNET_PAXEER_RPC_URL
     layerx_api_url: str = ""
+    layerx_network_id: int | None = Field(default=None, ge=1, le=4_294_967_295)
+    layerx_usdx_asset_id: str = ""
+    layerx_sequencer_public_key: str = ""
+    layerx_testnet_payer_account: str = ""
+    gateway_public_base_url: str = ""
 
     # 402LXP
     lxp402_enabled: bool = True
@@ -150,14 +155,15 @@ class GatewaySettings(BaseSettings):
                 "PAXEER_NETWORK_ENVIRONMENT must not be mainnet in staging"
             )
         if self.app_env == "staging":
-            if not _is_secure_url(self.layerx_api_url):
-                raise ValueError("LAYERX_API_URL must be an HTTPS URL in staging")
             if not _is_secure_url(self.paxeer_rpc_url):
                 raise ValueError("PAXEER_RPC_URL must be an HTTPS URL in staging")
             if self.paxeer_rpc_url.rstrip("/") == _MAINNET_PAXEER_RPC_URL:
                 raise ValueError(
                     "PAXEER_RPC_URL must point to the staging network in staging"
                 )
+            if self.paxeer_network_environment == "mainnet":
+                raise ValueError("staging must use a non-mainnet Paxeer network")
+            self._validate_layerx_http_configuration(require_test_payer=True)
         if (
             self.gateway_concurrency_lease_seconds
             <= self.gateway_request_timeout_seconds + 60
@@ -177,10 +183,13 @@ class GatewaySettings(BaseSettings):
                 raise ValueError(
                     "RECEIPT_SIGNING_BACKEND must be 'local'; other backends are not implemented"
                 )
-            if not _is_secure_url(self.layerx_api_url):
-                raise ValueError("LAYERX_API_URL must be an HTTPS URL in production")
             if not _is_secure_url(self.paxeer_rpc_url):
                 raise ValueError("PAXEER_RPC_URL must be an HTTPS URL in production")
+            self._validate_layerx_http_configuration(require_test_payer=False)
+            if self.layerx_testnet_payer_account:
+                raise ValueError(
+                    "LAYERX_TESTNET_PAYER_ACCOUNT must be empty in production"
+                )
             if self.paxeer_chain_id != 125:
                 raise ValueError("PAXEER_CHAIN_ID must be 125 in production")
             if "-----BEGIN" not in self.receipt_signing_private_key:
@@ -191,6 +200,21 @@ class GatewaySettings(BaseSettings):
             ):
                 raise ValueError("RECEIPT_SIGNING_KEY_ID must identify the production key")
         return self
+
+    def _validate_layerx_http_configuration(self, *, require_test_payer: bool) -> None:
+        """Require the exact network, asset, trust key, and public URL inputs."""
+        if self.layerx_network_id is None:
+            raise ValueError("LAYERX_NETWORK_ID is required for live 402LXP")
+        if re.fullmatch(r"[0-9a-fA-F]{64}", self.layerx_usdx_asset_id) is None:
+            raise ValueError("LAYERX_USDX_ASSET_ID must be 32-byte hexadecimal")
+        if re.fullmatch(r"[0-9a-fA-F]{64}", self.layerx_sequencer_public_key) is None:
+            raise ValueError("LAYERX_SEQUENCER_PUBLIC_KEY must be 32-byte hexadecimal")
+        if not _is_secure_base_url(self.gateway_public_base_url):
+            raise ValueError("GATEWAY_PUBLIC_BASE_URL must be an HTTPS origin/base URL")
+        if require_test_payer and re.fullmatch(
+            r"[0-9a-fA-F]{64}", self.layerx_testnet_payer_account
+        ) is None:
+            raise ValueError("LAYERX_TESTNET_PAYER_ACCOUNT must be 32-byte hexadecimal in staging")
 
     @property
     def rate_limiting_enabled(self) -> bool:
@@ -218,6 +242,22 @@ def _is_secure_url(value: str) -> bool:
             and bool(parsed.hostname)
             and parsed.username is None
             and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
+def _is_secure_base_url(value: str) -> bool:
+    """Return true for an HTTPS origin/base path without query or fragment."""
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
         )
     except ValueError:
         return False

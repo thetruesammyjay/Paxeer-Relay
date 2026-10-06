@@ -90,6 +90,9 @@ class ProviderCreate(BaseModel):
     wallet_address: str | None = Field(
         default=None, max_length=42, pattern=r"^0x[0-9a-fA-F]{40}$"
     )
+    layerx_account_id: str | None = Field(
+        default=None, min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$"
+    )
     description: str | None = None
     website_url: str | None = Field(
         default=None, max_length=2048, pattern=r"^https?://"
@@ -104,6 +107,7 @@ class ProviderOut(BaseModel):
     project_id: UUID
     environment: str
     wallet_address: str | None
+    layerx_account_id: str | None = None
     status: str
     is_verified: bool
     description: str | None

@@ -136,23 +136,136 @@ header. It never sends `PAYMENT-SIGNATURE`. A valid result confirms the
 published v2 envelope shape only. Do not put credentials or private data in
 `--json-body`.
 
-## What remains before a live paid demo
+## LayerX testnet paid request
 
-The gateway still emits its legacy JSON challenge, and the official buyer SDK
-and LayerX receipt verification are not connected to the invocation path. A
-live test therefore cannot be completed by setting `USE_MOCK_ADAPTER=false`:
-the live verifier intentionally fails closed. The live path needs all of the
-following before a paid request can be claimed:
+This path sends a real testnet payment. It requires operator-provided test
+credentials, a funded test payer, and an already-signed activity produced by
+the payer's authorized signer. It does not use a private key stored by
+PaxRelay.
 
-1. Pin and integrate the official LayerX Python SDK's HTTP buyer middleware.
-2. Bind the service offer and payment receipt to the requested resource,
-   amount, asset, recipient, network, and required `executed` commitment.
-3. Verify canonical receipt bytes and the sequencer signature using the
-   official trust inputs; persist idempotency and settlement state before
-   invoking the provider.
-4. Configure operator-issued test-network RPC credentials and a funded test
-   payer, then run the complete request, receipt, replay, and reconciliation
-   flow against the upstream test network.
+### 1. Configure the gateway
 
-An offer probe is not a paid-request demo, and a local simulated request must
-be labelled as simulated in screenshots and presentations.
+Keep `USE_MOCK_ADAPTER=false` and `APP_ENV=staging`. In the private root `.env`,
+set the staging Paxeer RPC URL, `PAXEER_NETWORK_ENVIRONMENT=testnet` (or the
+operator's staging label), and these LayerX values:
+
+```dotenv
+LAYERX_NETWORK_ID=<test network id>
+LAYERX_USDX_ASSET_ID=<registered USDX asset id as 64 hex characters>
+LAYERX_SEQUENCER_PUBLIC_KEY=<test sequencer public key as 64 hex characters>
+LAYERX_TESTNET_PAYER_ACCOUNT=<funded test payer account as 64 hex characters>
+GATEWAY_PUBLIC_BASE_URL=https://<public gateway host>
+```
+
+Keep buyer credentials out of the gateway environment. Copy
+`.layerx-buyer.env.example` to `.layerx-buyer.env`, set its operator RPC URL
+and API key, and keep that file on the machine running the buyer helper. The
+key must be authorized for `activity:write`.
+
+```powershell
+Copy-Item .layerx-buyer.env.example .layerx-buyer.env
+```
+
+Do not commit either private environment file. Apply migration
+`0019_layerx_testnet_accounts`, register the staging provider with its LayerX
+account ID, and publish a positive USDX per-call price. Confirm the RPC URL,
+asset, payer, provider account, and sequencer key with the network operator
+before submitting an activity.
+
+Point `packages/db/.env` at the staging database, then apply the migrations:
+
+```powershell
+cd packages/db
+uv run python -m alembic upgrade head
+cd ../..
+```
+
+### 2. Request the exact offer
+
+Set the staging capability, agent ID, and test API key for the request, then
+ask the gateway for a quote. The helper requires the 402LXP header to contain
+one valid exact-payment offer bound to that gateway:
+
+```powershell
+$gatewayBase = "https://<public gateway host>"
+$env:PAXRELAY_AGENT_ID = "<staging agent UUID>"
+$env:PAXRELAY_AGENT_API_KEY = "pk_<staging key>"
+$invoke = @{
+  capability = "<published capability>"
+  idempotency_key = [guid]::NewGuid().ToString()
+  arguments = @{}
+}
+$invoke | ConvertTo-Json -Depth 20 | Set-Content .\invoke.json -Encoding utf8
+uv run --env-file .layerx-buyer.env --package paxrelay-paxeer python tools/request_layerx_offer.py `
+  --gateway-base-url $gatewayBase `
+  --agent-id $env:PAXRELAY_AGENT_ID `
+  --request-file .\invoke.json `
+  --output .\payment-required.txt
+```
+
+The quote is bound to the exact `/v1/invoke/{tool_call_id}` resource, provider
+account, amount, asset, network, `executed` commitment, and configured test
+payer. Use the offer values to prepare the signed activity.
+
+### 3. Prepare and submit payment
+
+Have the authorized test payer signer create a canonical signed activity that
+matches the offer. Save its lowercase canonical hex to a file. First run the
+buyer helper without `--submit`; it prints the offer facts and activity ID,
+without contacting LayerX:
+
+```powershell
+uv run --env-file .layerx-buyer.env --package paxrelay-paxeer python tools/layerx_buyer_prepare.py `
+  --payment-required-file .\payment-required.txt `
+  --signed-activity-file .\signed-activity.hex
+```
+
+Check that the signer prepared the activity for the exact amount, asset,
+recipient and payer printed by the preflight. When those facts are confirmed,
+rerun with `--submit`. The official LayerX SDK buyer submits the activity,
+waits for the `executed` receipt, verifies it against the pinned sequencer key,
+and prints the `payment_signature` value. A `pending` result is not payment
+proof; retain the same activity ID and resolve its receipt before retrying.
+
+```powershell
+$buyer = uv run --env-file .layerx-buyer.env --package paxrelay-paxeer python tools/layerx_buyer_prepare.py `
+  --payment-required-file .\payment-required.txt `
+  --signed-activity-file .\signed-activity.hex `
+  --submit | ConvertFrom-Json
+```
+
+Send that exact proof to the resource URL shown during preflight. A successful
+gateway response includes the signed PaxRelay execution receipt and the
+standard `PAYMENT-RESPONSE` header:
+
+```powershell
+$offer = [System.Text.Encoding]::UTF8.GetString(
+  [Convert]::FromBase64String((Get-Content .\payment-required.txt -Raw).Trim())
+) | ConvertFrom-Json
+$headers = @{
+  Authorization = "Bearer $env:PAXRELAY_AGENT_API_KEY"
+  "X-Agent-Id" = $env:PAXRELAY_AGENT_ID
+  "PAYMENT-SIGNATURE" = $buyer.payment_signature
+}
+$result = Invoke-WebRequest `
+  -Uri $offer.resource.url `
+  -Method Post `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body "{}"
+if ($result.StatusCode -ne 200) { throw "Paid invocation failed with HTTP $($result.StatusCode)" }
+$result.Headers["PAYMENT-RESPONSE"]
+$result.Content | ConvertFrom-Json
+```
+
+Keep the signed activity, receipt, and `PAYMENT-RESPONSE` together for the
+staging record. If the gateway reports an already-recorded payment, it returns
+the same verified settlement header and does not call the provider again. Do
+not retry an ambiguous RPC submission with a newly signed activity; use the
+same activity ID to check status and recover its receipt.
+
+This workspace has not submitted the staging payment because no operator
+testnet values, funded payer, signer-produced activity, or trusted testnet
+sequencer key are configured here. The local simulator remains a separate,
+payment-free demonstration. A successful LayerX payment does not prove Paxeer
+L1 anchoring or qualify the separate reconciliation endpoints.

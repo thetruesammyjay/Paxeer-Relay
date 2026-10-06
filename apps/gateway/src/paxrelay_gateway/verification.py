@@ -50,26 +50,28 @@ async def verify_payment_proof(
     success). Raises :class:`VerificationError` with a stable reason code on
     any failure.
     """
-    # Parse the proof (JSON string from the agent).
-    try:
-        proof_claims = json.loads(proof)
-    except Exception as exc:
-        raise VerificationError("invalid_proof_format") from exc
+    # Live 402LXP v2 proofs are SDK-encoded Base64 headers. The adapter
+    # validates the header against the exact re-created offer and verifies its
+    # canonical receipt. Keep the JSON checklist only for the mock adapter.
+    if not getattr(adapter, "supports_402lxp_http_v2", False):
+        try:
+            proof_claims = json.loads(proof)
+        except Exception as exc:
+            raise VerificationError("invalid_proof_format") from exc
 
-    # 1. Local checklist.
-    ok, reason = verify_requirement_fields(
-        proof_claims=proof_claims,
-        expected_quote_id=str(quote.id),
-        expected_request_hash=quote.request_hash,
-        expected_amount_atomic=quote.amount.amount_atomic,
-        expected_recipient=quote.recipient_address,
-        expected_nonce=quote.nonce,
-        expires_at=quote.expires_at,
-        now=datetime.now(UTC).replace(tzinfo=None),
-        expected_chain_id=quote.chain_id,
-    )
-    if not ok:
-        raise VerificationError(reason)
+        ok, reason = verify_requirement_fields(
+            proof_claims=proof_claims,
+            expected_quote_id=str(quote.id),
+            expected_request_hash=quote.request_hash,
+            expected_amount_atomic=quote.amount.amount_atomic,
+            expected_recipient=quote.recipient_address,
+            expected_nonce=quote.nonce,
+            expires_at=quote.expires_at,
+            now=datetime.now(UTC).replace(tzinfo=None),
+            expected_chain_id=quote.chain_id,
+        )
+        if not ok:
+            raise VerificationError(reason)
 
     # 2. On-chain verification via the adapter (quote shaped for the adapter).
     try:
