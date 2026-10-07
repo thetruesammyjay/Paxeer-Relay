@@ -72,6 +72,7 @@ def _to_quote(m: QuoteModel) -> Quote:
         payment_scheme=m.payment_scheme,
         chain_id=m.chain_id,
         settlement_layer=m.settlement_layer,
+        network=m.network,
         recipient_address=m.recipient_address,
         request_hash=m.request_hash,
         nonce=m.nonce,
@@ -116,6 +117,7 @@ def _to_payment(m: PaymentModel) -> Payment:
         proof=m.proof,
         layerx_transaction_hash=m.layerx_transaction_hash,
         layerx_batch_id=m.layerx_batch_id,
+        solana_transaction_signature=m.solana_transaction_signature,
         l1_settlement_id=m.l1_settlement_id,
         verified_at=m.verified_at,
         settled_at=m.settled_at,
@@ -271,6 +273,15 @@ class SqlAlchemyPaymentRepository:
         m = await self._session.get(QuoteModel, sid(quote_id))
         return _to_quote(m) if m is not None else None
 
+    async def lock_quote_for_payment(self, quote_id: UUID) -> bool:
+        """Serialize payment verification and settlement for one quote."""
+        stmt = (
+            select(QuoteModel.id)
+            .where(QuoteModel.id == sid(quote_id))
+            .with_for_update()
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
+
     async def get_quote_by_tool_call(self, tool_call_id: UUID) -> Quote | None:
         """Return the most recent quote issued for a tool call."""
         stmt = (
@@ -295,10 +306,12 @@ class SqlAlchemyPaymentRepository:
         m.payment_scheme = quote.payment_scheme
         m.chain_id = quote.chain_id
         m.settlement_layer = quote.settlement_layer
+        m.network = quote.network
         m.recipient_address = quote.recipient_address
         m.request_hash = quote.request_hash
         m.nonce = quote.nonce
         m.quote_signature = quote.quote_signature
+        m.created_at = quote.created_at
         m.expires_at = quote.expires_at
         await self._session.flush()
         await self._session.refresh(m)
@@ -355,6 +368,7 @@ class SqlAlchemyPaymentRepository:
         m.proof = payment.proof
         m.layerx_transaction_hash = payment.layerx_transaction_hash
         m.layerx_batch_id = payment.layerx_batch_id
+        m.solana_transaction_signature = payment.solana_transaction_signature
         m.l1_settlement_id = payment.l1_settlement_id
         m.verified_at = payment.verified_at
         m.settled_at = payment.settled_at

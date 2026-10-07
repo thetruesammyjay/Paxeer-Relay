@@ -30,12 +30,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from paxrelay_db import close_database, configure_database, get_engine, get_session
 from paxrelay_paxeer import MockPaxeerAdapter, OfficialPaxeerAdapter
+from paxrelay_paxeer.errors import AdapterReadError
 from paxrelay_policy import PolicyEvaluator
 from paxrelay_receipts import LocalReceiptSigner, ReceiptSigner
 from paxrelay_router import ProviderRouter
 
 from paxrelay_gateway.config import GatewaySettings, get_settings
 from paxrelay_gateway.middleware import RequestBodyLimitMiddleware
+from paxrelay_gateway.payment.solana_x402 import SolanaX402Adapter
 from paxrelay_gateway.middleware.auth import AgentAuthError, resolve_agent
 from paxrelay_gateway.security.rate_limit import (
     GatewayConcurrencyLimitExceeded,
@@ -61,6 +63,9 @@ class Container:
     def __init__(self, settings: GatewaySettings) -> None:
         self.settings = settings
         self.paxeer: Any = self._build_paxeer(settings)
+        self.solana: SolanaX402Adapter | None = (
+            self._build_solana(settings) if settings.solana_x402_enabled else None
+        )
         self.router = ProviderRouter()
         self.evaluator = PolicyEvaluator()
         self.signer: ReceiptSigner = self._build_signer(settings)
@@ -89,6 +94,17 @@ class Container:
             # are stable across restarts in local development.
             key = _DEV_PRIVATE_KEY
         return LocalReceiptSigner(key, key_id=settings.receipt_signing_key_id)
+
+    @staticmethod
+    def _build_solana(settings: GatewaySettings) -> SolanaX402Adapter:
+        return SolanaX402Adapter(
+            facilitator_url=settings.solana_x402_facilitator_url,
+            rpc_url=settings.solana_devnet_rpc_url,
+            usdc_mint=settings.solana_devnet_usdc_mint,
+            gateway_public_base_url=settings.gateway_public_base_url,
+            facilitator_timeout_seconds=settings.solana_x402_timeout_seconds,
+            max_amount_atomic=settings.solana_x402_max_amount_atomic,
+        )
 
 
 # A fixed dev key so local signatures are reproducible across restarts.
@@ -128,6 +144,17 @@ async def lifespan(app: FastAPI):
                 await redis_client.ping()
             app.state.redis = redis_client
         _container = Container(settings)
+        if _container.solana is not None:
+            try:
+                await _container.solana.initialize()
+            except AdapterReadError as exc:
+                # Solana Devnet is optional: an unavailable facilitator must
+                # not take the independent LayerX payment path offline.
+                logger.warning(
+                    "Solana Devnet x402 is unavailable; LayerX remains enabled "
+                    "error_code=%s",
+                    exc.code,
+                )
         yield
     finally:
         _container = None
@@ -148,6 +175,9 @@ def _invoke_service(session: AsyncSession) -> GatewayInvokeService:
     return GatewayInvokeService(
         session=session,
         paxeer=c.paxeer,
+        payment_adapters=(
+            {"solana-devnet": c.solana} if c.solana is not None else None
+        ),
         router=c.router,
         evaluator=c.evaluator,
         signer=c.signer,
@@ -286,6 +316,7 @@ def create_app() -> FastAPI:
             capability=body.capability,
             idempotency_key=body.idempotency_key,
             arguments=body.arguments,
+            payment_rail=body.payment_rail,
             constraints=(
                 body.constraints.model_dump(exclude_none=True)
                 if body.constraints is not None

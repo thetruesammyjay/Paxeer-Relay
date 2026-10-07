@@ -21,6 +21,8 @@ build/
 .env.local
 .env.*.local
 .layerx-buyer.env
+.solana-buyer.env
+*.tsbuildinfo
 
 # Turbo
 .turbo/

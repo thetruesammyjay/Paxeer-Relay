@@ -17,6 +17,8 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _MAINNET_PAXEER_RPC_URL = "https://public-rpc.paxeer.app/rpc"
+_SOLANA_DEVNET_NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
+_SOLANA_DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 
 
 class GatewaySettings(BaseSettings):
@@ -108,6 +110,14 @@ class GatewaySettings(BaseSettings):
     layerx_testnet_payer_account: str = ""
     gateway_public_base_url: str = ""
 
+    # Solana x402 is an opt-in Devnet-only demo rail. Production is rejected.
+    solana_x402_enabled: bool = False
+    solana_x402_facilitator_url: str = "https://x402.org/facilitator"
+    solana_x402_timeout_seconds: float = Field(default=15.0, ge=1, le=90)
+    solana_x402_max_amount_atomic: int = Field(default=10_000, ge=1, le=10_000)
+    solana_devnet_rpc_url: str = "https://api.devnet.solana.com"
+    solana_devnet_usdc_mint: str = _SOLANA_DEVNET_USDC_MINT
+
     # 402LXP
     lxp402_enabled: bool = True
     lxp402_quote_ttl_seconds: int = 300
@@ -164,6 +174,28 @@ class GatewaySettings(BaseSettings):
             if self.paxeer_network_environment == "mainnet":
                 raise ValueError("staging must use a non-mainnet Paxeer network")
             self._validate_layerx_http_configuration(require_test_payer=True)
+        if self.solana_x402_enabled:
+            if self.app_env == "production":
+                raise ValueError(
+                    "SOLANA_X402_ENABLED is Devnet-only and cannot be enabled in production"
+                )
+            if not _is_secure_url(self.solana_x402_facilitator_url):
+                raise ValueError("SOLANA_X402_FACILITATOR_URL must be HTTPS")
+            if not _is_secure_url(self.solana_devnet_rpc_url):
+                raise ValueError("SOLANA_DEVNET_RPC_URL must be HTTPS")
+            if self.solana_devnet_usdc_mint != _SOLANA_DEVNET_USDC_MINT:
+                raise ValueError(
+                    "SOLANA_DEVNET_USDC_MINT must be the official Devnet USDC mint"
+                )
+            local_http = (
+                self.app_env in {"development", "test"}
+                and _is_loopback_base_url(self.gateway_public_base_url)
+            )
+            if not _is_secure_base_url(self.gateway_public_base_url) and not local_http:
+                raise ValueError(
+                    "GATEWAY_PUBLIC_BASE_URL must be HTTPS, except for a loopback "
+                    "HTTP URL in development or test"
+                )
         if (
             self.gateway_concurrency_lease_seconds
             <= self.gateway_request_timeout_seconds + 60
@@ -254,6 +286,22 @@ def _is_secure_base_url(value: str) -> bool:
         return (
             parsed.scheme == "https"
             and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+    except ValueError:
+        return False
+
+
+def _is_loopback_base_url(value: str) -> bool:
+    """Allow a plain HTTP resource origin only for local development."""
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "http"
+            and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
             and parsed.username is None
             and parsed.password is None
             and not parsed.query

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +20,7 @@ class InvokeRequest(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
     arguments: dict[str, Any]
     constraints: RouteConstraints | None = None
+    payment_rail: Literal["layerx", "solana-devnet"] = "layerx"
 
 
 class InvokeProofRequest(BaseModel):

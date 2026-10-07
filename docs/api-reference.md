@@ -203,10 +203,12 @@ or digit and may contain lowercase letters, digits, `_`, and `-`.
 | `GET /services/{service_id}` | Get one service. |
 | `PATCH /services/{service_id}/status` | Pause or resume a service for new routes; requires `services:write`. |
 
-Provider creation accepts the optional EVM `wallet_address` and
-`layerx_account_id`. Staging providers must set `layerx_account_id` to a
+Provider creation accepts the optional EVM `wallet_address`,
+`layerx_account_id`, and `solana_devnet_address`. Staging providers must set `layerx_account_id` to a
 32-byte, 64-character hexadecimal account ID; live 402LXP offers pay that
-account. Production provider onboarding still requires the EVM wallet address.
+account. `solana_devnet_address` must be a base58-encoded 32-byte public key
+and is used only by the opt-in Devnet payment rail. Production provider
+onboarding still requires the EVM wallet address.
 
 Service create bodies contain `name`, `slug`, `capability`, `protocols`,
 `price_per_call`, `base_url`, `endpoint_url`, `version`, and optional
@@ -380,8 +382,9 @@ project, the key request is:
 `GET /receipts` requires `receipts:read` and scopes results through the
 tenant-owned tool call. It returns receipt summaries, not the complete
 canonical receipt. `payment_amount` is an integer in atomic currency units;
-receipt hash, signature, and signing-key fields can be absent. Listing records
-does not verify their signatures.
+summaries also include payment scheme, network, asset, and transaction fields
+when recorded. Receipt hash, signature, and signing-key fields can be absent.
+Listing records does not verify their signatures.
 
 `GET /transactions/{tool_call_id}/execution-attempts` requires
 `transactions:read`. It first verifies that the transaction belongs to the
@@ -511,7 +514,8 @@ organisation, project, and environment.
   "capability": "research.web-search",
   "idempotency_key": "search-2026-09-26-001",
   "arguments": {"query": "Paxeer Network"},
-  "constraints": {"maximum_latency_ms": 1500}
+  "constraints": {"maximum_latency_ms": 1500},
+  "payment_rail": "layerx"
 }
 ```
 
@@ -525,6 +529,12 @@ successful provider response. A missing eligible service returns 503. A missing 
 policy or an enforced policy denial returns 403. A policy result that requires
 approval returns HTTP 202 with an `approval_id`; a reviewer decides through
 the control-plane approval routes above.
+
+`payment_rail` is optional and defaults to `layerx`. Set it to
+`solana-devnet` for the experimental Solana x402 V2 `exact` rail. It is disabled
+by default, requires Devnet gateway configuration and a provider Devnet
+destination, and is rejected in production. See the [Solana Devnet paid request
+procedure](DEMO-RUNBOOK.md#solana-devnet-x402-paid-request).
 Repeating the same idempotency key and request returns its current quote or
 state. After successful delivery, it returns the saved `result` and signed
 `receipt` with `replayed: true`, without calling the provider again. Repeating
@@ -549,8 +559,10 @@ A verified payment is forwarded to the selected HTTP service with the original
 arguments as a JSON POST body, or to the selected MCP tool over Streamable HTTP.
 The gateway checks the MCP tool name and schema against the immutable service
 version before calling it. A successful provider result returns `result` and a
-signed `receipt`. Live successful responses include `PAYMENT-RESPONSE` with
-the verified LayerX receipt and `lxp:<receipt_digest>` reference. Proof
+signed `receipt`. Live LayerX responses include `PAYMENT-RESPONSE` with the
+verified LayerX receipt and `lxp:<receipt_digest>` reference. Solana Devnet
+responses use the same x402 V2 header with the facilitator settlement result.
+Proof
 failures return HTTP 402; reusing an already consumed
 quote returns HTTP 409; provider failures return HTTP 502. Payment verification
 and service delivery remain separate states.

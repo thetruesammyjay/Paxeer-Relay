@@ -23,6 +23,7 @@ dependencies = [
     "paxrelay-router",
     "paxrelay-receipts",
     "paxrelay-paxeer",
+    "x402[svm]==2.25.0",
 ]
 
 [tool.uv.sources]

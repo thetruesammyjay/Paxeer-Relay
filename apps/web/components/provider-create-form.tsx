@@ -45,6 +45,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
   const [slugEdited, setSlugEdited] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
   const [layerxAccountId, setLayerxAccountId] = useState("");
+  const [solanaDevnetAddress, setSolanaDevnetAddress] = useState("");
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -59,6 +60,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
       slug: slug.trim(),
       wallet_address: walletAddress.trim() || null,
       layerx_account_id: layerxAccountId.trim().toLowerCase() || null,
+      solana_devnet_address: solanaDevnetAddress.trim() || null,
       description: description.trim() || null,
       website_url: websiteUrl.trim() || null,
     };
@@ -70,6 +72,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
       setSlugEdited(false);
       setWalletAddress("");
       setLayerxAccountId("");
+      setSolanaDevnetAddress("");
       setDescription("");
       setWebsiteUrl("");
       setOpen(false);
@@ -127,7 +130,7 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
             <div>
               <h2 className="card-title">Register a provider</h2>
               <p className="card-description">
-                Add a provider to this project. Live-payment providers need a LayerX account ID; production profiles also keep their EVM wallet address.
+                Add a provider destination for each payment rail you plan to use. Solana Devnet is for testing only.
               </p>
             </div>
           </header>
@@ -195,6 +198,22 @@ export function ProviderCreateForm({ apiKey, onCreated }: ProviderCreateFormProp
                 placeholder="64-character LayerX account ID"
               />
               <small>LayerX payment destination, as 32-byte lowercase hexadecimal.</small>
+            </label>
+            <label className="resource-form-field resource-form-wide">
+              <span>Solana Devnet address <small>(optional; test rail only)</small></span>
+              <input
+                className="search mono"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                minLength={32}
+                maxLength={44}
+                pattern="[1-9A-HJ-NP-Za-km-z]{32,44}"
+                value={solanaDevnetAddress}
+                onChange={(event) => setSolanaDevnetAddress(event.target.value)}
+                placeholder="Base58 Solana public key"
+              />
+              <small>Receives test USDC on Solana Devnet. Do not use a mainnet address as a production payment destination.</small>
             </label>
             <label className="resource-form-field resource-form-wide">
               <span>Website <small>(optional)</small></span>

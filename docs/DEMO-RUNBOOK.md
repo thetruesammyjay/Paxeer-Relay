@@ -269,3 +269,88 @@ testnet values, funded payer, signer-produced activity, or trusted testnet
 sequencer key are configured here. The local simulator remains a separate,
 payment-free demonstration. A successful LayerX payment does not prove Paxeer
 L1 anchoring or qualify the separate reconciliation endpoints.
+
+## Solana Devnet x402 paid request
+
+This is a separate, opt-in test rail. It uses x402 V2 `exact` on Solana
+Devnet, the Devnet USDC mint, and a facilitator configured by the operator.
+Solana's official documentation identifies Devnet as
+`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` and requires checking the facilitator's
+`/supported` endpoint for the exact scheme and network before advertising an
+offer ([Solana x402 guide](https://solana.com/docs/payments/agentic-payments/x402),
+[facilitator guide](https://solana.com/docs/tools/x402-facilitator)). This
+workspace does not verify that the default facilitator currently supports this
+network; PaxRelay fails closed if the configured facilitator does not.
+
+Devnet tokens have no production value. This rail is rejected in production.
+For the demo only, PaxRelay maps each USDX atomic unit in the service price to
+the same number of Devnet USDC atomic units. That is a test convention, not a
+price conversion or a claim of parity. The buyer helper refuses offers above
+10,000 atomic units (0.01 Devnet USDC).
+
+### Configure and start the gateway
+
+Apply migration `0020_solana_devnet_payment_rail` to the configured database.
+In the gateway environment, set:
+
+```dotenv
+APP_ENV=development
+USE_MOCK_ADAPTER=true
+SOLANA_X402_ENABLED=true
+SOLANA_X402_FACILITATOR_URL=https://x402.org/facilitator
+SOLANA_X402_MAX_AMOUNT_ATOMIC=10000
+SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
+GATEWAY_PUBLIC_BASE_URL=http://127.0.0.1:8001
+```
+
+The facilitator URL is configurable. Confirm it advertises `exact` for the
+Devnet network before using it. When running from `apps/gateway` with the root
+`.env` file, start the gateway with:
+
+```powershell
+uv run --env-file ../../.env uvicorn paxrelay_gateway.main:app --reload --port 8001
+```
+
+Register a provider with its **Solana Devnet wallet address** in the provider
+dashboard. Ensure the provider has a published, active service, and the agent
+has an active policy and `gateway:invoke` permission. The provider address is a
+receiving wallet destination; registering it does not prove wallet ownership.
+
+### Prepare a disposable buyer
+
+Copy the buyer template and set a disposable Devnet keypair, active agent
+credentials, gateway URL, and funded Devnet account. The account needs the
+Devnet USDC required by the offer and SOL for any transaction fees not covered
+by the facilitator.
+
+```powershell
+Copy-Item .solana-buyer.env.example .solana-buyer.env
+```
+
+`SOLANA_DEVNET_PRIVATE_KEY` accepts a base58 secret key or the one-line JSON
+secret-key array produced by Solana CLI. Keep this local file private; never
+reuse a mainnet keypair. The gateway enforces a maximum payment of `10000`
+atomic units (0.01 Devnet USDC), and the helper applies the same limit before
+signing.
+
+From `apps/gateway`, run one paid request for a published capability:
+
+```powershell
+uv run --env-file ../../.solana-buyer.env python ../../tools/solana_devnet_paid_request.py `
+  --capability "research.web-search" `
+  --arguments-json '{"query":"PaxRelay Devnet demo"}'
+```
+
+The helper checks the challenge version, network, mint, amount cap, and exact
+resource URL before it creates a signed payload. It retries the resource with
+`PAYMENT-SIGNATURE`, then prints the signed PaxRelay receipt and
+`PAYMENT-RESPONSE`. The gateway verifies and settles the transfer through the
+configured facilitator before calling the provider. Save the printed
+idempotency key. If the result is ambiguous, pass the same key with the same
+capability and arguments; do not start a second paid request with a new key
+until you have checked the first request's result.
+
+This code path is implemented but has not been exercised with a funded Devnet
+buyer or a facilitator that has been confirmed to support the configured
+network. A successful Devnet payment is not production payment qualification
+and does not change the pending LayerX operator validation.

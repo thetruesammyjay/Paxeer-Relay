@@ -15,6 +15,10 @@ export interface ReceiptRecord {
   response_hash: string;
   payment_amount: string;
   payment_currency: string;
+  payment_scheme: string;
+  payment_network: string | null;
+  payment_asset: string | null;
+  payment_transaction: string | null;
   layerx_transaction: string | null;
   execution_latency_ms: number;
   execution_status: string;

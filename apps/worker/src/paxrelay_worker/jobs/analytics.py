@@ -17,7 +17,7 @@ from paxrelay_db.models.payments import PaymentModel, ToolCallModel
 from paxrelay_worker.config import WorkerSettings
 from paxrelay_worker.jobs import BaseJob
 
-_SPENT_STATES = ("verified", "settled_layerx", "anchored_l1")
+_SPENT_STATES = ("verified", "settled_layerx", "settled_solana", "anchored_l1")
 _ADVISORY_LOCK_KEY = 0x5052584C595F414E  # "PRXLY_AN", reserved for this worker job.
 _DIMENSIONS = (
     "organisation_id",

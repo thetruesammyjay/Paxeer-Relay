@@ -365,7 +365,12 @@ export function ProviderDirectory() {
                                   LayerX {provider.layerx_account_id.slice(0, 10)}…{provider.layerx_account_id.slice(-8)}
                                 </code>
                               ) : null}
-                              {!provider.wallet_address && !provider.layerx_account_id ? (
+                              {provider.solana_devnet_address ? (
+                                <code className="mono" title={provider.solana_devnet_address}>
+                                  Solana Devnet {provider.solana_devnet_address.slice(0, 8)}…{provider.solana_devnet_address.slice(-6)}
+                                </code>
+                              ) : null}
+                              {!provider.wallet_address && !provider.layerx_account_id && !provider.solana_devnet_address ? (
                                 <span className="muted">No payment destination configured</span>
                               ) : null}
                             </div>

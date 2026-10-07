@@ -202,7 +202,9 @@ class SqlAlchemyPolicyRepository:
         now = datetime.utcnow()
         stmt = select(func.coalesce(func.sum(PaymentModel.amount_atomic), 0)).where(
             PaymentModel.agent_id == sid(agent_id),
-            PaymentModel.state.in_(("verified", "settled_layerx", "anchored_l1")),
+            PaymentModel.state.in_(
+                ("verified", "settled_layerx", "settled_solana", "anchored_l1")
+            ),
             PaymentModel.created_at >= since,
         )
         paid = (await self._session.execute(stmt)).scalar_one()

@@ -1,6 +1,6 @@
 """Canonical JSON serialization for PaxRelay receipt hashing.
 
-Receipt v1 uses compact UTF-8 JSON with recursively sorted object keys. UUIDs
+Receipt v1 and v2 use compact UTF-8 JSON with recursively sorted object keys. UUIDs
 are lowercase hyphenated strings. Timestamps are UTC ISO-8601 strings with six
 fractional digits and a ``Z`` suffix. Integers remain exact base-10 JSON
 integers; finite floating-point values use their shortest round-trip decimal

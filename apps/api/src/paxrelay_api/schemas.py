@@ -18,6 +18,7 @@ from jsonschema import Draft202012Validator, SchemaError
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from paxrelay_api.security.scopes import parse_scopes
+from paxrelay_domain.types import SolanaAddress
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +94,9 @@ class ProviderCreate(BaseModel):
     layerx_account_id: str | None = Field(
         default=None, min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$"
     )
+    solana_devnet_address: SolanaAddress | None = Field(
+        default=None, min_length=32, max_length=44
+    )
     description: str | None = None
     website_url: str | None = Field(
         default=None, max_length=2048, pattern=r"^https?://"
@@ -108,6 +112,7 @@ class ProviderOut(BaseModel):
     environment: str
     wallet_address: str | None
     layerx_account_id: str | None = None
+    solana_devnet_address: str | None = None
     status: str
     is_verified: bool
     description: str | None
@@ -445,6 +450,10 @@ class ReceiptOut(BaseModel):
     response_hash: str
     payment_amount: int
     payment_currency: str
+    payment_scheme: str
+    payment_network: str | None
+    payment_asset: str | None
+    payment_transaction: str | None
     layerx_transaction: str | None
     execution_latency_ms: int
     execution_status: str

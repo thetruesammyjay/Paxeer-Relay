@@ -26,6 +26,9 @@ class ReceiptPaymentSummary(BaseModel):
     currency: str = "USDX"
     amount: MonetaryAmount
     payment_id: UUID
+    network: str | None = None
+    asset: str | None = None
+    transaction: str | None = None
     layerx_transaction: str | None = None
     l1_settlement: str | None = None
 
@@ -65,7 +68,7 @@ class ExecutionReceipt(BaseModel):
     model_config = {"frozen": True}
 
     id: UUID = Field(default_factory=uuid4)
-    version: str = "1"
+    version: str = "2"
     tool_call_id: UUID
     agent_id: UUID
     provider_id: UUID

@@ -29,6 +29,7 @@ def _provider_out(p: Provider) -> ProviderOut:
         environment=p.environment.value,
         wallet_address=p.wallet_address,
         layerx_account_id=p.layerx_account_id,
+        solana_devnet_address=p.solana_devnet_address,
         status=p.status.value,
         is_verified=p.is_verified,
         description=p.description,
@@ -69,6 +70,7 @@ async def create_provider(
             if body.layerx_account_id is not None
             else None
         ),
+        solana_devnet_address=body.solana_devnet_address,
         description=body.description,
         website_url=body.website_url,
     )

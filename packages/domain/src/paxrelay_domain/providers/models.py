@@ -16,6 +16,7 @@ from paxrelay_domain.types import (
     Currency,
     Environment,
     MonetaryAmount,
+    SolanaAddress,
     WalletAddress,
 )
 
@@ -126,6 +127,10 @@ class Provider(BaseModel):
         max_length=64,
         pattern=r"^[0-9a-f]{64}$",
         description="LayerX 32-byte account identifier in lowercase hexadecimal.",
+    )
+    solana_devnet_address: SolanaAddress | None = Field(
+        default=None,
+        description="Solana Devnet payment destination in base58 format.",
     )
     status: ProviderStatus = ProviderStatus.ACTIVE
     description: str | None = None

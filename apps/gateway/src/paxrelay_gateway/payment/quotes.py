@@ -21,7 +21,10 @@ def build_quote(
     recipient_address: str,
     request_hash: str,
     ttl_seconds: int = 300,
-    chain_id: int = 125,
+    chain_id: int | None = 125,
+    payment_scheme: str = "402LXP",
+    settlement_layer: str = "layerx",
+    network: str | None = None,
 ) -> Quote:
     """Create a fresh, immutable :class:`Quote` for a tool call."""
     return Quote(
@@ -30,6 +33,9 @@ def build_quote(
         service_version_id=service_version_id,
         amount=amount,
         chain_id=chain_id,
+        payment_scheme=payment_scheme,
+        settlement_layer=settlement_layer,
+        network=network or f"layerx:{chain_id}",
         recipient_address=recipient_address,
         request_hash=request_hash,
         nonce=generate_nonce(),
@@ -48,6 +54,10 @@ def quote_to_requirement_input(quote: Quote) -> dict:
         "recipient_address": quote.recipient_address,
         "request_hash": quote.request_hash,
         "nonce": quote.nonce,
+        "created_at": quote.created_at.isoformat() + "Z",
         "expires_at": quote.expires_at.isoformat() + "Z",
         "chain_id": quote.chain_id,
+        "payment_scheme": quote.payment_scheme,
+        "settlement_layer": quote.settlement_layer,
+        "network": quote.network,
     }

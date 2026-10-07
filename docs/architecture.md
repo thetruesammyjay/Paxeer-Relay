@@ -60,19 +60,21 @@ forwarding.
 ### `apps/gateway`
 
 FastAPI paid-call gateway on port 8080. `/v1/invoke` creates a tool-call record,
-selects a service, evaluates the agent's policy, and returns a 402LXP
-requirement. `/v1/invoke/{tool_call_id}` verifies a proof, records the verified
-payment and atomically consumes its quote nonce, commits that state before
-provider dispatch, forwards the JSON arguments to the stored service version,
-and issues a receipt after a successful provider response.
+selects a service, evaluates the agent's policy, and returns a payment
+requirement for the selected rail. LayerX 402LXP remains the default; an
+opt-in Solana Devnet x402 V2 `exact` rail is available for testing. The
+completion route verifies and records settlement, consumes the quote nonce,
+commits payment state before provider dispatch, forwards the JSON arguments to
+the stored service version, and issues a receipt after a successful provider
+response.
 
 The gateway is composed from domain, database, policy, routing, receipt, and
 Paxeer adapter packages. Paid-call routes require a tenant API key with the
 `gateway:invoke` scope and verify that the selected active agent belongs to the
 key's organisation, project, and environment. Production startup rejects mock
-payments and local signing defaults. The official adapter's HTTP request and
-verification behavior still needs validation against authoritative Paxeer and
-LayerX services before it can process real funds.
+payments, local signing defaults, and the Solana Devnet rail. The LayerX
+adapter's external contracts and the Solana facilitator's operational support
+must be validated before either rail is used for real funds.
 
 ### `apps/worker`
 
@@ -117,8 +119,8 @@ references in the repository's `docs/` directory.
   for both the control plane and paid-call gateway in staging and production.
 - **Gateway readiness** checks PostgreSQL and Redis when gateway rate limiting
   is enabled; it does not claim external payment or provider health.
-- **Paxeer adapter** isolates wallet, 402LXP, LayerX, registry, and settlement
-  access behind Python protocols.
+- **Payment adapters** isolate LayerX 402LXP and opt-in Solana Devnet x402
+  verification and settlement behind the gateway.
 - **Provider** receives a JSON POST only after a payment proof passes local
   checks and adapter verification.
 
@@ -161,10 +163,10 @@ application services (API routes / gateway invoke service)
 ```
 
 Keep FastAPI, SQLAlchemy, and HTTP client details out of
-`packages/domain`. Keep payment protocol-specific code inside
-`packages/paxeer-adapter` and provider invocation transports inside the gateway
-proxy. Use repository interfaces for persistence and keep policy evaluation and
-provider scoring deterministic and side-effect free.
+`packages/domain`. Keep payment protocol-specific code within payment adapters
+and provider invocation transports inside the gateway proxy. Use repository
+interfaces for persistence and keep policy evaluation and provider scoring
+deterministic and side-effect free.
 
 Provider invocation has protocol-specific gateway adapters for HTTP JSON and
 MCP Streamable HTTP. The MCP adapter verifies the upstream tool contract stored

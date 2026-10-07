@@ -12,8 +12,8 @@ The domain receipt (`ExecutionReceipt`) includes:
 - receipt version and IDs for the tool call, agent, provider, service, and
   service version;
 - capability and hashes of the canonical request and raw provider response;
-- payment scheme, currency, atomic amount, payment ID, and optional LayerX/L1
-  references;
+- payment scheme, currency, atomic amount, payment ID, and optional network,
+  asset, transaction, and LayerX/L1 references;
 - execution start/end times, latency, and execution status;
 - routing ID, strategy, and score;
 - issue time, receipt hash, signature, and signing key ID.
@@ -26,7 +26,7 @@ current invoke path.
 
 ## Canonical hashing
 
-Receipt v1 uses the PaxRelay canonical JSON rules implemented in
+Receipt v1 and v2 use the PaxRelay canonical JSON rules implemented in
 `packages/receipts`:
 
 1. Remove the top-level `signature`, `receipt_hash`, and `signing_key_id`
@@ -51,6 +51,11 @@ must preserve integer precision and apply the published rules exactly. The
 cross-language input/output vector and a Node.js reference verifier are in
 [`receipt-test-vectors.md`](receipt-test-vectors.md). Run the verifier with the
 published fixture before changing the canonicalization contract.
+
+Receipt v2 adds explicit payment network, asset, and transaction fields. New
+LayerX receipts retain `layerx_transaction`; Solana Devnet receipts identify
+the x402 network, Devnet USDC mint, and settled transaction signature. The
+published cross-language fixture remains a v1 receipt vector.
 
 ## Signatures and verification
 

@@ -49,6 +49,7 @@ class PaymentState(str, Enum):
     SUBMITTED = "submitted"
     VERIFIED = "verified"
     SETTLED_LAYERX = "settled_layerx"
+    SETTLED_SOLANA = "settled_solana"
     ANCHORED_L1 = "anchored_l1"
     REFUNDED = "refunded"
     DISPUTED = "disputed"
@@ -93,8 +94,9 @@ class Quote(BaseModel):
     service_version_id: UUID
     amount: MonetaryAmount
     payment_scheme: str = Field(default="402LXP")
-    chain_id: int = Field(default=125)
+    chain_id: int | None = Field(default=125)
     settlement_layer: str = Field(default="layerx")
+    network: str = Field(default="layerx:125")
     recipient_address: str
     request_hash: str = Field(description="Keccak256 hash of the canonical request body.")
     nonce: str = Field(description="Unique per-quote nonce for replay protection.")
@@ -150,6 +152,7 @@ class Payment(BaseModel):
     proof: str | None = Field(default=None, description="Raw payment proof submitted by the agent.")
     layerx_transaction_hash: str | None = None
     layerx_batch_id: str | None = None
+    solana_transaction_signature: str | None = None
     l1_settlement_id: str | None = None
     verified_at: datetime | None = None
     settled_at: datetime | None = None

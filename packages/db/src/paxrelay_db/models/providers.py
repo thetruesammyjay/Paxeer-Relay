@@ -24,6 +24,7 @@ class ProviderModel(Base, TenantMixin, TimestampMixin, SoftDeleteMixin):
     website_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     wallet_address: Mapped[str | None] = mapped_column(String(42), nullable=True)
     layerx_account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    solana_devnet_address: Mapped[str | None] = mapped_column(String(44), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     extra_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

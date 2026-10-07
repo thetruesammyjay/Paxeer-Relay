@@ -53,7 +53,9 @@ async def verify_payment_proof(
     # Live 402LXP v2 proofs are SDK-encoded Base64 headers. The adapter
     # validates the header against the exact re-created offer and verifies its
     # canonical receipt. Keep the JSON checklist only for the mock adapter.
-    if not getattr(adapter, "supports_402lxp_http_v2", False):
+    if not getattr(adapter, "supports_402lxp_http_v2", False) and not getattr(
+        adapter, "supports_x402_solana", False
+    ):
         try:
             proof_claims = json.loads(proof)
         except Exception as exc:

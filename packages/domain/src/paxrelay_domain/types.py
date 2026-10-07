@@ -60,8 +60,29 @@ def _validate_wallet_address(value: str) -> str:
     return value.lower()
 
 
+def _validate_solana_address(value: str) -> str:
+    """Require a base58-encoded 32-byte Solana public key."""
+    if not 32 <= len(value) <= 44:
+        raise ValueError("Invalid Solana address: expected a 32-byte public key.")
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    decoded = 0
+    for character in value:
+        digit = alphabet.find(character)
+        if digit < 0:
+            raise ValueError("Invalid Solana address: expected base58 encoding.")
+        decoded = decoded * 58 + digit
+    decoded_bytes = decoded.to_bytes((decoded.bit_length() + 7) // 8, "big")
+    leading_zeroes = len(value) - len(value.lstrip("1"))
+    if len(decoded_bytes) + leading_zeroes != 32:
+        raise ValueError("Invalid Solana address: expected a 32-byte public key.")
+    return value
+
+
 #: Validated EVM wallet address — Annotated[str, ...] for full Pydantic v2 support.
 WalletAddress = Annotated[str, AfterValidator(_validate_wallet_address)]
+
+#: Base58-encoded 32-byte Solana public key.
+SolanaAddress = Annotated[str, AfterValidator(_validate_solana_address)]
 
 
 # ---------------------------------------------------------------------------

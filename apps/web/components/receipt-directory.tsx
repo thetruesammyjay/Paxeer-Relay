@@ -61,6 +61,10 @@ function matchesSearch(receipt: ReceiptRecord, search: string) {
     receipt.capability,
     receipt.payment_amount,
     receipt.payment_currency,
+    receipt.payment_scheme,
+    receipt.payment_network ?? "",
+    receipt.payment_asset ?? "",
+    receipt.payment_transaction ?? "",
     receipt.layerx_transaction ?? "",
     receipt.execution_status,
     receipt.request_hash,
@@ -79,6 +83,18 @@ function ReceiptEvidence({ receipt }: { receipt: ReceiptRecord }) {
         <div>
           <dt>Receipt hash</dt>
           <dd>{receipt.receipt_hash ?? "Not recorded"}</dd>
+        </div>
+        <div>
+          <dt>Payment rail</dt>
+          <dd>{receipt.payment_scheme} · {receipt.payment_network ?? "Network not recorded"}</dd>
+        </div>
+        <div>
+          <dt>Payment asset</dt>
+          <dd>{receipt.payment_asset ?? receipt.payment_currency}</dd>
+        </div>
+        <div>
+          <dt>Payment transaction</dt>
+          <dd>{receipt.payment_transaction ?? receipt.layerx_transaction ?? "Not recorded"}</dd>
         </div>
         <div>
           <dt>Signing key</dt>
@@ -290,7 +306,7 @@ export function ReceiptDirectory() {
                       <th scope="col">Execution</th>
                       <th scope="col">Latency</th>
                       <th scope="col">Issued</th>
-                      <th scope="col">LayerX reference</th>
+                      <th scope="col">Settlement transaction</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -315,9 +331,12 @@ export function ReceiptDirectory() {
                         <td>{receipt.execution_latency_ms.toLocaleString()} ms</td>
                         <td>{displayDate(receipt.issued_at)}</td>
                         <td>
-                          {receipt.layerx_transaction ? (
-                            <code className="mono" title={receipt.layerx_transaction}>
-                              {shortId(receipt.layerx_transaction)}
+                          {(receipt.payment_transaction ?? receipt.layerx_transaction) ? (
+                            <code
+                              className="mono"
+                              title={receipt.payment_transaction ?? receipt.layerx_transaction ?? ""}
+                            >
+                              {shortId(receipt.payment_transaction ?? receipt.layerx_transaction ?? "")}
                             </code>
                           ) : <span className="muted">Not recorded</span>}
                         </td>

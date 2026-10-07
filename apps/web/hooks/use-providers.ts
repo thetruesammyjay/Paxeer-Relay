@@ -10,6 +10,7 @@ export interface ProviderRecord {
   environment: string;
   wallet_address: string | null;
   layerx_account_id: string | null;
+  solana_devnet_address: string | null;
   status: string;
   is_verified: boolean;
   description: string | null;
@@ -21,6 +22,7 @@ export interface ProviderCreateInput {
   slug: string;
   wallet_address: string | null;
   layerx_account_id: string | null;
+  solana_devnet_address: string | null;
   description: string | null;
   website_url: string | null;
 }

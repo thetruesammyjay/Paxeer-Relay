@@ -106,6 +106,36 @@ Production values for `PAXEER_L1_SETTLEMENT_CONTRACT_ADDRESS`,
 contract. A LayerX activity can be `executed` without an L1 settlement; do not
 present an execution receipt as an L1-finalized payment.
 
+## Solana Devnet x402
+
+The gateway has a separate experimental x402 V2 `exact` adapter for Solana
+Devnet. It emits the standard `PAYMENT-REQUIRED` header, checks the buyer's
+`PAYMENT-SIGNATURE` against the persisted quote and exact resource URL, asks the
+configured facilitator to verify and settle, and includes its result in
+`PAYMENT-RESPONSE`. The selected Solana destination is stored on the provider
+as `solana_devnet_address`; settlement signature, network, and asset are kept
+in payment and receipt records.
+
+The only accepted network is
+`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`, with Devnet USDC mint
+`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`. A gateway instance checks the
+facilitator's `/supported` response before advertising the rail. A facilitator
+must support the exact scheme and network, and its replay, fee-payer, and
+confirmation behavior must be reviewed before use. The rail is off by default
+and startup rejects it in production. The gateway and buyer helper enforce a
+0.01-USDC Devnet spending cap; this is a demo safeguard, not a production
+agent signing policy.
+
+The gateway currently stores policy spend in USDX atomic units. For this
+Devnet-only path, it uses the same six-decimal atomic amount against test USDC.
+This is only a demo denomination mapping. It is not a production exchange rate,
+does not imply USDX and USDC are redeemable at parity, and must not be enabled
+for real-value payment accounting.
+
+No funded Devnet transfer has been run in this workspace. See the
+[Solana Devnet paid request procedure](DEMO-RUNBOOK.md#solana-devnet-x402-paid-request)
+for operator configuration and its current validation limits.
+
 ## Adapter responsibilities
 
 | Interface | Responsibility |

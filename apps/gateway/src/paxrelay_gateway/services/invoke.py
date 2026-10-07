@@ -49,7 +49,7 @@ from paxrelay_db.repositories import (
 from paxrelay_receipts import hash_body
 from paxrelay_policy import PolicyEvaluator
 from paxrelay_router import ProviderRouter
-from paxrelay_paxeer.errors import AdapterConfigurationError
+from paxrelay_paxeer.errors import AdapterConfigurationError, AdapterReadError
 
 from paxrelay_gateway.payment.quotes import build_quote, quote_to_requirement_input
 from paxrelay_gateway.policy.service import PolicyGateError, evaluate_request
@@ -110,6 +110,7 @@ class GatewayInvokeService:
         router: ProviderRouter,
         evaluator: PolicyEvaluator,
         signer: Any,
+        payment_adapters: dict[str, PaymentAdapter] | None = None,
         quote_ttl_seconds: int = 300,
         max_provider_attempts: int = 2,
         max_provider_response_bytes: int = 10_485_760,
@@ -123,6 +124,7 @@ class GatewayInvokeService:
     ) -> None:
         self._session = session
         self._paxeer = paxeer
+        self._payment_adapters = {"layerx": paxeer, **(payment_adapters or {})}
         self._router = router
         self._evaluator = evaluator
         self._signer = signer
@@ -149,12 +151,24 @@ class GatewayInvokeService:
         idempotency_key: str,
         arguments: dict[str, Any],
         constraints: dict[str, Any] | None = None,
+        payment_rail: str = "layerx",
     ) -> QuoteResult:
         """Handle a new invocation: idempotency → route → policy → 402 quote."""
         tool_calls = SqlAlchemyToolCallRepository(self._session)
 
-        request_hash = hash_body(_canonical_args(arguments))
-        normal_constraints = constraints or {}
+        if payment_rail not in self._payment_adapters:
+            return QuoteResult(
+                status_code=422,
+                body=_err(
+                    "payment_rail_unavailable",
+                    "The selected payment rail is not enabled.",
+                ),
+            )
+        request_material: dict[str, Any] = arguments
+        if payment_rail == "solana-devnet":
+            request_material = {"arguments": arguments, "payment_rail": payment_rail}
+        request_hash = hash_body(_canonical_args(request_material))
+        normal_constraints = dict(constraints or {})
         try:
             route_constraints = RouteConstraints(**normal_constraints)
         except ValueError:
@@ -205,6 +219,17 @@ class GatewayInvokeService:
                     )
                 payment_repo = SqlAlchemyPaymentRepository(self._session)
                 stored_quote = await payment_repo.get_quote_by_tool_call(existing.id)
+                if stored_quote is None or not self._quote_matches_rail(
+                    stored_quote, payment_rail
+                ):
+                    return QuoteResult(
+                        status_code=409,
+                        body=_err(
+                            "idempotency_payment_rail_mismatch",
+                            "This idempotency key is already bound to another payment rail.",
+                        ),
+                        tool_call_id=existing.id,
+                    )
                 stored_payment = await payment_repo.get_by_tool_call(existing.id)
                 return QuoteResult(
                     status_code=200,
@@ -230,6 +255,15 @@ class GatewayInvokeService:
                         ),
                         tool_call_id=existing.id,
                     )
+                if not self._quote_matches_rail(quote, payment_rail):
+                    return QuoteResult(
+                        status_code=409,
+                        body=_err(
+                            "idempotency_payment_rail_mismatch",
+                            "This idempotency key is already bound to another payment rail.",
+                        ),
+                        tool_call_id=existing.id,
+                    )
                 if quote.is_expired():
                     return QuoteResult(
                         status_code=410,
@@ -239,7 +273,14 @@ class GatewayInvokeService:
                         ),
                         tool_call_id=existing.id,
                     )
-                return await self._payment_challenge(quote, existing.id)
+                try:
+                    return await self._payment_challenge(quote, existing.id)
+                except AdapterReadError as exc:
+                    return QuoteResult(
+                        status_code=503,
+                        body=_err("payment_offer_unavailable", exc.code),
+                        tool_call_id=existing.id,
+                    )
             if existing.request_state == RequestState.APPROVAL_PENDING:
                 approval_stmt = (
                     select(ApprovalRequestModel)
@@ -381,8 +422,8 @@ class GatewayInvokeService:
                 or not best_metrics.health_check_passing
                 or not provider.is_operable()
                 or (
-                    self._require_provider_wallet
-                    and not self._provider_payment_recipient(provider)
+                    (self._require_provider_wallet or payment_rail == "solana-devnet")
+                    and not self._provider_payment_recipient(provider, payment_rail)
                 )
                 or not _supports_service_version(best_svc, _best_ver)
                 or best_svc.status.value != "active"
@@ -405,8 +446,19 @@ class GatewayInvokeService:
                     ),
                     tool_call_id=call.id,
                 )
-            current_recipient = self._provider_payment_recipient(provider)
-            if current_recipient.lower() != approval.recipient_address.lower():
+            current_recipient = self._provider_payment_recipient(
+                provider, payment_rail
+            )
+            recipient_changed = (
+                current_recipient != approval.recipient_address
+                if payment_rail == "solana-devnet"
+                else (
+                    current_recipient is None
+                    or current_recipient.lower()
+                    != approval.recipient_address.lower()
+                )
+            )
+            if recipient_changed:
                 approval.status = "invalidated"
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
                 await tool_calls.save(call)
@@ -475,8 +527,9 @@ class GatewayInvokeService:
             )
             await routes.save(route)
             provider = await providers.get(route.provider_id)
-            if self._require_provider_wallet and (
-                provider is None or not self._provider_payment_recipient(provider)
+            if (self._require_provider_wallet or payment_rail == "solana-devnet") and (
+                provider is None
+                or not self._provider_payment_recipient(provider, payment_rail)
             ):
                 call = call.model_copy(update={"request_state": RequestState.FAILED})
                 await tool_calls.save(call)
@@ -489,7 +542,7 @@ class GatewayInvokeService:
                     tool_call_id=call.id,
                 )
             recipient = (
-                self._provider_payment_recipient(provider)
+                self._provider_payment_recipient(provider, payment_rail)
                 if provider is not None
                 else None
             ) or _ZERO_ADDRESS
@@ -702,11 +755,20 @@ class GatewayInvokeService:
             recipient_address=recipient,
             request_hash=request_hash,
             ttl_seconds=self._quote_ttl_seconds,
-            chain_id=self._chain_id,
+            chain_id=self._chain_id if payment_rail == "layerx" else None,
+            payment_scheme="402LXP" if payment_rail == "layerx" else "exact",
+            settlement_layer=(
+                "layerx" if payment_rail == "layerx" else "solana-devnet"
+            ),
+            network=(
+                f"layerx:{self._chain_id}"
+                if payment_rail == "layerx"
+                else "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
+            ),
         )
         try:
             challenge = await self._payment_challenge(quote, call.id)
-        except AdapterConfigurationError:
+        except AdapterReadError:
             if approval is not None:
                 approval.status = "invalidated"
             call = call.model_copy(update={"request_state": RequestState.FAILED})
@@ -734,20 +796,25 @@ class GatewayInvokeService:
 
         return challenge
 
-    def _provider_payment_recipient(self, provider: Any) -> str | None:
+    def _provider_payment_recipient(
+        self, provider: Any, payment_rail: str = "layerx"
+    ) -> str | None:
         """Select the destination format required by the configured adapter."""
+        if payment_rail == "solana-devnet":
+            return provider.solana_devnet_address
         if getattr(self._paxeer, "supports_402lxp_http_v2", False):
             return provider.layerx_account_id
         return provider.wallet_address
 
     async def _payment_challenge(self, quote: Any, tool_call_id: UUID) -> QuoteResult:
         """Build the JSON response and, for live LayerX, the standard header."""
-        requirement = await self._paxeer.create_payment_requirement(
+        adapter = self._adapter_for_quote(quote)
+        requirement = await adapter.create_payment_requirement(
             quote_to_requirement_input(quote)
         )
         headers: dict[str, str] = {}
-        if getattr(self._paxeer, "supports_402lxp_http_v2", False):
-            headers["PAYMENT-REQUIRED"] = self._paxeer.encode_payment_required(
+        if hasattr(adapter, "encode_payment_required"):
+            headers["PAYMENT-REQUIRED"] = adapter.encode_payment_required(
                 requirement
             )
         return QuoteResult(
@@ -786,6 +853,8 @@ class GatewayInvokeService:
         quote = await payments.get_quote_by_tool_call(call.id)
         if quote is None:
             return InvokeResult(status_code=404, body=_err("not_found", "quote_not_found"))
+        if not await payments.lock_quote_for_payment(quote.id):
+            return InvokeResult(status_code=404, body=_err("not_found", "quote_not_found"))
         quote_expired = quote.is_expired()
         existing_payment = await payments.get_by_tool_call(call.id)
         if call.request_state == RequestState.DELIVERED:
@@ -823,7 +892,13 @@ class GatewayInvokeService:
         # 1. Verify the proof (local checklist + adapter, fail-closed).
         try:
             verification = await verify_payment_proof(
-                proof=proof, quote=quote, adapter=self._paxeer
+                proof=proof, quote=quote, adapter=self._adapter_for_quote(quote)
+            )
+        except AdapterReadError as exc:
+            return InvokeResult(
+                status_code=503,
+                body=_err("payment_verification_unavailable", exc.code),
+                tool_call_id=call.id,
             )
         except VerificationUnavailableError as exc:
             return InvokeResult(
@@ -873,18 +948,30 @@ class GatewayInvokeService:
             agent_id=call.agent_id,
             provider_id=quote.provider_id,
             amount=quote.amount,
-            state=PaymentState.VERIFIED,
+            state=(
+                PaymentState.SETTLED_SOLANA
+                if quote.settlement_layer == "solana-devnet"
+                else PaymentState.VERIFIED
+            ),
             proof=proof,
             layerx_transaction_hash=verification.get("layerx_transaction_hash"),
             layerx_batch_id=verification.get("layerx_batch_id"),
+            solana_transaction_signature=verification.get(
+                "solana_transaction_signature"
+            ),
             verified_at=datetime.utcnow(),
+            settled_at=(
+                datetime.utcnow()
+                if quote.settlement_layer == "solana-devnet"
+                else None
+            ),
         )
         await payments.save(payment)
 
         call = call.model_copy(
             update={
                 "request_state": RequestState.PAYMENT_VERIFIED,
-                "payment_state": PaymentState.VERIFIED,
+                "payment_state": payment.state,
             }
         )
         await tool_calls.save(call)
@@ -1071,6 +1158,10 @@ class GatewayInvokeService:
             amount=quote.amount,
             payment_id=payment.id,
             layerx_transaction_hash=payment.layerx_transaction_hash,
+            payment_scheme=quote.payment_scheme,
+            payment_network=quote.network,
+            payment_asset=verification.get("asset"),
+            payment_transaction=verification.get("transaction"),
             route_id=route.id if route else uuid4(),
             strategy=route.strategy.value if route else "balanced",
             route_score=route.score if route else 0.0,
@@ -1104,12 +1195,14 @@ class GatewayInvokeService:
     def _payment_response_headers(
         self, verification: dict[str, Any], quote: Any
     ) -> dict[str, str]:
-        """Build the LayerX settlement header for any verified payment result."""
-        if not getattr(self._paxeer, "supports_402lxp_http_v2", False):
+        """Build the standard settlement response for the quote's payment rail."""
+        adapter = self._adapter_for_quote(quote)
+        if not hasattr(adapter, "encode_payment_response"):
             return {}
         return {
-            "PAYMENT-RESPONSE": self._paxeer.encode_payment_response(
-                verification, quote_to_requirement_input(quote)
+            "PAYMENT-RESPONSE": adapter.encode_payment_response(
+                verification,
+                quote_to_requirement_input(quote),
             )
         }
 
@@ -1117,19 +1210,40 @@ class GatewayInvokeService:
         self, payment: Payment | None, quote: Any
     ) -> dict[str, str]:
         """Recreate an already-recorded payment response without provider replay."""
-        if (
-            payment is None
-            or not payment.proof
-            or not getattr(self._paxeer, "supports_402lxp_http_v2", False)
-        ):
+        if payment is None:
+            return {}
+        try:
+            adapter = self._adapter_for_quote(quote)
+        except AdapterReadError:
+            return {}
+        if quote.settlement_layer == "solana-devnet":
+            response_header = adapter.response_header_for_payment(payment, quote)
+            return {"PAYMENT-RESPONSE": response_header} if response_header else {}
+        if not payment.proof or not getattr(adapter, "supports_402lxp_http_v2", False):
             return {}
         try:
             verification = await verify_payment_proof(
-                proof=payment.proof, quote=quote, adapter=self._paxeer
+                proof=payment.proof, quote=quote, adapter=adapter
             )
         except (VerificationError, VerificationUnavailableError):
             return {}
         return self._payment_response_headers(verification, quote)
+
+    def _adapter_for_quote(self, quote: Any) -> PaymentAdapter:
+        """Resolve the verifier by the rail persisted with the immutable quote."""
+        rail = (
+            "solana-devnet"
+            if quote.settlement_layer == "solana-devnet"
+            else "layerx"
+        )
+        adapter = self._payment_adapters.get(rail)
+        if adapter is None:
+            raise AdapterConfigurationError("payment_rail_unavailable")
+        return adapter
+
+    @staticmethod
+    def _quote_matches_rail(quote: Any, payment_rail: str) -> bool:
+        return quote.settlement_layer == payment_rail
 
     async def _completed_result_body(self, call: ToolCall) -> dict[str, Any] | None:
         """Rebuild the original success envelope for an idempotent replay."""

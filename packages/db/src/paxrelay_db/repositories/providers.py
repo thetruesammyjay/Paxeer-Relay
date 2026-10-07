@@ -40,6 +40,7 @@ def _to_provider(m: ProviderModel) -> Provider:
         environment=Environment(m.environment),
         wallet_address=m.wallet_address,
         layerx_account_id=m.layerx_account_id,
+        solana_devnet_address=m.solana_devnet_address,
         status=ProviderStatus(m.status),
         description=m.description,
         website_url=m.website_url,
@@ -315,6 +316,7 @@ class SqlAlchemyProviderRepository:
         m.environment = provider.environment.value
         m.wallet_address = provider.wallet_address
         m.layerx_account_id = provider.layerx_account_id
+        m.solana_devnet_address = provider.solana_devnet_address
         m.status = provider.status.value
         m.description = provider.description
         m.website_url = provider.website_url
